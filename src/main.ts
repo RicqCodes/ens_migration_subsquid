@@ -367,31 +367,28 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
   const endBlock = ctx.blocks.at(-1)?.header.height;
   ctx.log.info(`running from ${startBlock} to ${endBlock}`);
 
-  newOwners.length > 0 && (await ctx.store.upsert(newOwners));
-  newResolvers.length > 0 && (await ctx.store.upsert(newResolvers));
-  newTTLs.length > 0 && (await ctx.store.upsert(newTTLs));
-  transfers.length > 0 && (await ctx.store.upsert(transfers));
-  nameWraps.length > 0 && (await ctx.store.upsert(nameWraps));
-  nameUnwraps.length > 0 && (await ctx.store.upsert(nameUnwraps));
-  fusesSets.length > 0 && (await ctx.store.upsert(fusesSets));
-  expiries.length > 0 && (await ctx.store.upsert(expiries));
-  wrappedTransfers.length > 0 && (await ctx.store.upsert(wrappedTransfers));
-  registeredNames.length > 0 && (await ctx.store.upsert(registeredNames));
-  renewedNames.length > 0 && (await ctx.store.upsert(renewedNames));
-  nameTransfers.length > 0 && (await ctx.store.upsert(nameTransfers));
-  registrations.length > 0 && (await ctx.store.upsert(registrations));
-  resolvers.length > 0 && (await ctx.store.upsert(resolvers));
-  addrChanges.length > 0 && (await ctx.store.upsert(addrChanges));
-  multipleAddrChanges.length > 0 &&
-    (await ctx.store.upsert(multipleAddrChanges));
-  authorisationChanges.length > 0 &&
-    (await ctx.store.upsert(authorisationChanges));
-  contenthashChanges.length > 0 && (await ctx.store.upsert(contenthashChanges));
-  interfaceChanges.length > 0 && (await ctx.store.upsert(interfaceChanges));
-  nameChanges.length > 0 && (await ctx.store.upsert(nameChanges));
-  pubkeyChanges.length > 0 && (await ctx.store.upsert(pubkeyChanges));
-  textChanges.length > 0 && (await ctx.store.upsert(textChanges));
-  textChangesWithValue.length > 0 &&
-    (await ctx.store.upsert(textChangesWithValue));
+  await ctx.store.upsert(newOwners);
+  await ctx.store.upsert(newResolvers);
+  await ctx.store.upsert(newTTLs);
+  await ctx.store.upsert(transfers);
+  await ctx.store.upsert(nameWraps);
+  await ctx.store.upsert(nameUnwraps);
+  await ctx.store.upsert(fusesSets);
+  await ctx.store.upsert(expiries);
+  await ctx.store.upsert(wrappedTransfers);
+  await ctx.store.upsert(registeredNames);
+  await ctx.store.upsert(renewedNames);
+  await ctx.store.upsert(nameTransfers);
+  await ctx.store.upsert(registrations);
+  await ctx.store.upsert(resolvers);
+  await ctx.store.upsert(addrChanges);
+  await ctx.store.upsert(multipleAddrChanges);
+  await ctx.store.upsert(authorisationChanges);
+  await ctx.store.upsert(contenthashChanges);
+  await ctx.store.upsert(interfaceChanges);
+  await ctx.store.upsert(nameChanges);
+  await ctx.store.upsert(pubkeyChanges);
+  await ctx.store.upsert(textChanges);
+  await ctx.store.upsert(textChangesWithValue);
   // await ctx.store.upsert(burns)
 });

@@ -33,7 +33,9 @@ async function _getOrCreateResolver(
   let resolver = await ctx.store.findOne(Resolver, {
     where: { id },
   });
-  let domain = await ctx.store.findOne(Domain, { where: { id: node } });
+  let domain = await ctx.store.findOne(Domain, {
+    where: { id: node },
+  });
 
   if (resolver === null || resolver === undefined) {
     resolver = new Resolver({ id });
@@ -90,6 +92,7 @@ export async function handleAddrChanged(
   // Check if the Domain with the specified ID exists
   let domain = await ctx.store.findOne(Domain, {
     where: { id: event.node },
+    relations: ["resolvedAddress"],
   });
 
   if (domain) {
@@ -102,7 +105,7 @@ export async function handleAddrChanged(
   await ctx.store.upsert(resolver);
 
   if (domain && domain.resolver == resolver.id) {
-    domain.resolvedAddress = event.a;
+    domain.resolvedAddress = account;
     await ctx.store.upsert(domain);
   }
 

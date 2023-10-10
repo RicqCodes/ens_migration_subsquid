@@ -34,6 +34,11 @@ export const processor = new EvmBatchProcessor()
   })
   .setFinalityConfirmation(75)
   .setFields({
+    log: {
+      topics: true,
+      data: true,
+      transactionHash: true,
+    },
     transaction: {
       from: true,
       value: true,
@@ -44,7 +49,7 @@ export const processor = new EvmBatchProcessor()
   //     from: 3327417,
   //   })
   .setBlockRange({
-    from: 3000000,
+    from: 3726301,
   })
   .addLog({
     address: [BASE_REGISTRAR_CONTRACT],
@@ -123,7 +128,7 @@ export const processor = new EvmBatchProcessor()
   })
   .addLog({
     topic0: [
-      resolver.events["ABIChanged"].topic,
+      //   resolver.events["ABIChanged"].topic,
       resolver.events["AddrChanged"].topic,
       resolver.events["AddressChanged"].topic,
       resolver.events["AuthorisationChanged"].topic,
