@@ -8,6 +8,8 @@ import {
   REGIS_CONTROLLER_OLD_CONTRACT,
   processor,
 } from "./processor";
+
+// Import event types and model classes
 import {
   ExpiryExtended,
   FusesSet,
@@ -33,12 +35,16 @@ import {
   PubkeyChanged,
   TextChanged,
 } from "./model";
+
+// Import ABI definitions
 import * as baseRegistrarAbi from "./abi/BaseRegistrar";
 import * as ensRegistry from "./abi/Registry";
 import * as resolver from "./abi/PublicResolver";
 import * as ethRegistrarControllerAbi from "./abi/EthRegistrarController";
 import * as ethRegistrarOldControllerAbi from "./abi/EthRegistrarControllerOld";
 import * as nameWrapperAbi from "./abi/NameWrapper";
+
+// Import event handlers
 import {
   handleNewOwner,
   handleNewOwnerOldRegistry,
@@ -80,6 +86,7 @@ import {
 } from "./handlers/resolver";
 
 processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
+  // Initialize arrays to store decoded events
   let newOwners: NewOwner[] = [];
   let newResolvers: NewResolver[] = [];
   let newTTLs: NewTTL[] = [];
@@ -104,9 +111,10 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
   let textChanges: TextChanged[] = [];
   let textChangesWithValue: TextChanged[] = [];
 
+  // Loop through blocks in the context
   for (let c of ctx.blocks) {
     for (let log of c.logs) {
-      // decode and normalize the tx data
+      // Decode and handle events based on their topics
       if (log.topics[0] === resolver.events["ABIChanged"].topic) {
         const eventData = resolver.events["ABIChanged"].decode(log);
         const resolverEvent = await handleABIChanged(eventData, log, ctx);
@@ -189,6 +197,7 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
         await handleVersionChanged(eventData, log, ctx);
       }
 
+      // Check the contract address and handle events accordingly
       if (log.address === REGISTRY_CONTRACT) {
         console.log("registry is running");
         if (log.topics[0] === ensRegistry.events["NewOwner"].topic) {
@@ -212,7 +221,7 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
           transfers.push(transfer);
         }
       } else if (log.address === REGISTRY_OLD_CONTRACT) {
-        console.log("old registry running");
+        // console.log("old registry running");
         if (log.topics[0] === ensRegistry.events["NewOwner"].topic) {
           const eventData = ensRegistry.events["NewOwner"].decode(log);
           const newOwner = await handleNewOwnerOldRegistry(eventData, log, ctx);

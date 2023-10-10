@@ -45,12 +45,12 @@ export const processor = new EvmBatchProcessor()
       hash: true,
     },
   })
-  //   .setBlockRange({
-  //     from: 3327417,
-  //   })
   .setBlockRange({
-    from: 3726301,
+    from: 3327417,
   })
+  //   .setBlockRange({
+  //     from: 3796301,
+  //   })
   .addLog({
     address: [BASE_REGISTRAR_CONTRACT],
     topic0: [

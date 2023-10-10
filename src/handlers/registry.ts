@@ -29,7 +29,6 @@ async function _createDomain(
     domain.createdAt = timestamp;
     domain.subdomainCount = 0;
   }
-
   return domain;
 }
 
@@ -164,8 +163,6 @@ export async function handleNewResolver(
 ): Promise<NewResolver> {
   let id: string | null;
 
-  // if resolver is set to 0x0, set id to null
-  // we don't want to create a resolver entity for 0x0
   if (event.resolver === "0x0") {
     id = null;
   } else {
@@ -173,7 +170,7 @@ export async function handleNewResolver(
   }
 
   let node = event.node;
-  let domain = await _getDomain(node, ctx)!;
+  let domain: Domain = await _getDomain(node, ctx)!;
   let resolver: Resolver = await ctx.store.findOne(Resolver, {
     where: { id },
     relations: ["domain"],
@@ -186,7 +183,6 @@ export async function handleNewResolver(
       resolver.address = decodeHex(event.resolver);
 
       await ctx.store.upsert(resolver);
-      // since this is a new resolver entity, there can't be a resolved address yet so set to null
       domain.resolvedAddress = null;
       domain.resolver = resolver;
     } else {
@@ -293,7 +289,9 @@ export async function handleNewResolverOldRegistry(
   ctx: any
 ): Promise<NewResolver | undefined> {
   let node = event.node;
+  console.log("node", node);
   let domain = await _getDomain(node, ctx, BigInt(log.block.timestamp))!;
+  console.log("domain", domain);
   if (node == ROOT_NODE || !domain.isMigrated) {
     return await handleNewResolver(event, log, ctx);
   }
