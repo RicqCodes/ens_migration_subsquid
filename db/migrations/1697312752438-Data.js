@@ -1,5 +1,5 @@
-module.exports = class Data1697278103868 {
-    name = 'Data1697278103868'
+module.exports = class Data1697312752438 {
+    name = 'Data1697312752438'
 
     async up(db) {
         await db.query(`CREATE TABLE "wrapped_domain" ("id" character varying NOT NULL, "expiry_date" numeric NOT NULL, "fuses" integer NOT NULL, "name" text, "domain_id" character varying, "owner_id" character varying, CONSTRAINT "REL_fcf7d9e1bebc771bfb17fd5b95" UNIQUE ("domain_id"), CONSTRAINT "PK_aaa259344b4e7ef833bcf06cbe1" PRIMARY KEY ("id"))`)
@@ -9,10 +9,10 @@ module.exports = class Data1697278103868 {
         await db.query(`CREATE UNIQUE INDEX "IDX_a2348ea430f304b2835a86361b" ON "registration" ("domain_id") `)
         await db.query(`CREATE INDEX "IDX_71c21cfbf21b51f211313e11d8" ON "registration" ("registrant_id") `)
         await db.query(`CREATE TABLE "account" ("id" character varying NOT NULL, CONSTRAINT "PK_54115ee388cdb6d86bb4bf5b2ea" PRIMARY KEY ("id"))`)
-        await db.query(`CREATE TABLE "resolver" ("id" character varying NOT NULL, "address" bytea NOT NULL, "content_hash" bytea, "texts" text array, "coin_types" jsonb, "domain_id" character varying, "addr_id" character varying, CONSTRAINT "PK_b6dce266610be08e8e81cd4d897" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE TABLE "resolver" ("id" character varying NOT NULL, "address" bytea NOT NULL, "content_hash" bytea, "texts" text array, "coin_types" jsonb NOT NULL, "domain_id" character varying, "addr_id" character varying, CONSTRAINT "PK_b6dce266610be08e8e81cd4d897" PRIMARY KEY ("id"))`)
         await db.query(`CREATE INDEX "IDX_2b8d86cb40182edda882e901f2" ON "resolver" ("domain_id") `)
         await db.query(`CREATE INDEX "IDX_0d373b33adb77b2f6f3c24ea77" ON "resolver" ("addr_id") `)
-        await db.query(`CREATE TABLE "domain" ("id" character varying NOT NULL, "name" text, "label_name" text, "labelhash" bytea, "subdomain_count" integer NOT NULL DEFAULT '0', "ttl" numeric, "is_migrated" boolean NOT NULL DEFAULT false, "created_at" numeric NOT NULL, "expiry_date" numeric, "parent_id" character varying, "resolved_address_id" character varying, "resolver_id" character varying, "owner_id" character varying, "registrant_id" character varying, "wrapped_owner_id" character varying, CONSTRAINT "PK_27e3ec3ea0ae02c8c5bceab3ba9" PRIMARY KEY ("id"))`)
+        await db.query(`CREATE TABLE "domain" ("id" character varying NOT NULL, "name" text, "label_name" text, "labelhash" bytea, "subdomain_count" integer NOT NULL, "ttl" numeric, "is_migrated" boolean NOT NULL, "created_at" numeric NOT NULL, "expiry_date" numeric, "parent_id" character varying, "resolved_address_id" character varying, "resolver_id" character varying, "owner_id" character varying, "registrant_id" character varying, "wrapped_owner_id" character varying, CONSTRAINT "PK_27e3ec3ea0ae02c8c5bceab3ba9" PRIMARY KEY ("id"))`)
         await db.query(`CREATE INDEX "IDX_7d85eb18ed8935de858c8a3f22" ON "domain" ("parent_id") `)
         await db.query(`CREATE INDEX "IDX_b597038b01d0ab26ce426aa3ea" ON "domain" ("resolved_address_id") `)
         await db.query(`CREATE INDEX "IDX_739629023aaf16951a6b481d59" ON "domain" ("resolver_id") `)

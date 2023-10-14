@@ -88,78 +88,156 @@ async function _saveDomain(domain: Domain, ctx: any) {
   await ctx.store.upsert(domain);
 }
 
+// async function _handleNewOwner(
+//   event: { node: string; label: string; owner: string },
+//   log: Log,
+//   ctx: DataHandlerContext<Store>,
+//   isMigrated: boolean
+// ) {
+//   let account = new Account({ id: event.owner });
+//   await ctx.store.upsert(account);
+
+//   let subnode = makeSubnode(event.node, event.label);
+//   let domain = await _getDomain(subnode, ctx, BigInt(log.block.timestamp));
+//   let parent = await _getDomain(event.node, ctx);
+//   if (domain === undefined) {
+//     domain = new Domain({ id: subnode });
+//     domain.createdAt = BigInt(log.block.timestamp);
+//     domain.subdomainCount = 0;
+//   }
+
+//   if (domain.parent === undefined && parent !== undefined) {
+//     // domain.parent = parent;
+//     parent.subdomainCount = parent.subdomainCount + 1;
+//     // EntityBuffer.add(parent);
+//     await ctx.store.upsert(parent);
+//   }
+
+//   if (domain.name == null) {
+//     // Get label and node names
+//     let label = await ctx.store.get(Domain, {
+//       where: {
+//         labelName: event.label,
+//       },
+//     });
+
+//     if (label != undefined) {
+//       domain!.labelName = label.labelName;
+//     }
+
+//     let newLabel = "";
+//     if (label === undefined) {
+//       newLabel = "[" + event.label.slice(2) + "]";
+//     }
+
+//     if (
+//       event.node ==
+//       "0x0000000000000000000000000000000000000000000000000000000000000000"
+//     ) {
+//       domain!.name = label?.labelName || newLabel;
+//     } else {
+//       parent = parent!;
+//       let name = parent?.name;
+//       if ((label || newLabel) && name) {
+//         domain.name = label?.labelName
+//           ? label?.labelName
+//           : newLabel + "." + name;
+//       }
+//     }
+//   }
+//   domain.owner = account;
+//   domain.labelhash = decodeHex(event.label);
+//   domain.isMigrated = isMigrated;
+//   await _saveDomain(domain, ctx);
+
+//   let domainEvent = new NewOwner({
+//     id: createEventID(log.block.height, log.logIndex),
+//   });
+//   domainEvent.blockNumber = log.block.height;
+//   domainEvent.transactionID = decodeHex(log.transaction?.hash!);
+//   domainEvent.parentDomain = parent;
+//   domainEvent.domain = domain;
+//   domainEvent.owner = account;
+
+//   EntityBuffer.add(domainEvent);
+// }
 async function _handleNewOwner(
   event: { node: string; label: string; owner: string },
   log: Log,
   ctx: DataHandlerContext<Store>,
   isMigrated: boolean
 ) {
-  let account = new Account({ id: event.owner });
-  await ctx.store.upsert(account);
-
   let subnode = makeSubnode(event.node, event.label);
   let domain = await _getDomain(subnode, ctx, BigInt(log.block.timestamp));
-  let parent = await _getDomain(event.node, ctx);
-  if (domain === undefined) {
-    domain = new Domain({ id: subnode });
-    domain.createdAt = BigInt(log.block.timestamp);
-    domain.subdomainCount = 0;
-  }
+  try {
+    let account = new Account({ id: event.owner });
+    await ctx.store.upsert(account);
 
-  if (domain.parent === undefined && parent !== undefined) {
-    // domain.parent = parent;
-    parent.subdomainCount = parent.subdomainCount + 1;
-    // EntityBuffer.add(parent);
-    await ctx.store.upsert(parent);
-  }
-
-  if (domain.name == null) {
-    // Get label and node names
-    let label = await ctx.store.get(Domain, {
-      where: {
-        labelName: event.label,
-      },
-    });
-
-    if (label != undefined) {
-      domain!.labelName = label.labelName;
+    let parent = await _getDomain(event.node, ctx);
+    if (domain === undefined) {
+      domain = new Domain({ id: subnode });
+      domain.createdAt = BigInt(log.block.timestamp);
+      domain.subdomainCount = 0;
     }
 
-    let newLabel = "";
-    if (label === undefined) {
-      newLabel = "[" + event.label.slice(2) + "]";
+    if (domain.parent === undefined && parent !== undefined) {
+      parent.subdomainCount = parent.subdomainCount + 1;
+      await ctx.store.upsert(parent);
     }
 
-    if (
-      event.node ==
-      "0x0000000000000000000000000000000000000000000000000000000000000000"
-    ) {
-      domain!.name = label?.labelName || newLabel;
-    } else {
-      parent = parent!;
-      let name = parent?.name;
-      if ((label || newLabel) && name) {
-        domain.name = label?.labelName
-          ? label?.labelName
-          : newLabel + "." + name;
+    if (domain.name == null) {
+      let label = await ctx.store.get(Domain, {
+        where: {
+          labelName: event.label,
+        },
+      });
+
+      if (label != undefined) {
+        domain!.labelName = label.labelName;
+      }
+
+      let newLabel = "";
+      if (label === undefined) {
+        newLabel = "[" + event.label.slice(2) + "]";
+      }
+
+      if (
+        event.node ==
+        "0x0000000000000000000000000000000000000000000000000000000000000000"
+      ) {
+        domain!.name = label?.labelName || newLabel;
+      } else {
+        parent = parent!;
+        let name = parent?.name;
+        if ((label || newLabel) && name) {
+          domain.name = label?.labelName
+            ? label?.labelName
+            : newLabel + "." + name;
+        }
       }
     }
+    domain.owner = account;
+    domain.labelhash = decodeHex(event.label);
+    domain.isMigrated = isMigrated;
+    await _saveDomain(domain, ctx);
+
+    let domainEvent = new NewOwner({
+      id: createEventID(log.block.height, log.logIndex),
+    });
+    domainEvent.blockNumber = log.block.height;
+    domainEvent.transactionID = decodeHex(log.transaction?.hash!);
+    domainEvent.parentDomain = parent;
+    domainEvent.domain = domain;
+    domainEvent.owner = account;
+
+    EntityBuffer.add(domainEvent);
+  } catch (err) {
+    console.error("Error during _handleNewOwner:", err);
+
+    // Handle the error by setting specific fields to null or as needed
+    // domain.owner = null;
+    // Set other fields to null or handle them as needed
   }
-  domain.owner = account;
-  domain.labelhash = decodeHex(event.label);
-  domain.isMigrated = isMigrated;
-  await _saveDomain(domain, ctx);
-
-  let domainEvent = new NewOwner({
-    id: createEventID(log.block.height, log.logIndex),
-  });
-  domainEvent.blockNumber = log.block.height;
-  domainEvent.transactionID = decodeHex(log.transaction?.hash!);
-  domainEvent.parentDomain = parent;
-  domainEvent.domain = domain;
-  domainEvent.owner = account;
-
-  EntityBuffer.add(domainEvent);
 }
 
 export async function handleNewResolver(
@@ -171,8 +249,6 @@ export async function handleNewResolver(
   let domain = await _getDomain(event.node, ctx)!;
 
   try {
-    console.log("events in handle new resolver", event);
-
     if (event.resolver === "0x0") {
       id = null;
     } else {

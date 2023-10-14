@@ -143,12 +143,12 @@ export async function handleMulticoinAddrChanged(
 
   let eventCoinType = event.coinType;
   if (resolver.coinTypes == null) {
-    resolver.coinTypes = [eventCoinType];
+    resolver.coinTypes = [Number(eventCoinType)];
     EntityBuffer.add(resolver);
   } else {
-    let coinTypes: bigint[] = resolver.coinTypes as bigint[];
-    if (!coinTypes.includes(eventCoinType)) {
-      coinTypes.push(eventCoinType);
+    let coinTypes: number[] = resolver.coinTypes as number[];
+    if (!coinTypes.includes(Number(eventCoinType))) {
+      coinTypes.push(Number(eventCoinType));
       resolver.coinTypes = coinTypes;
       // await ctx.store.upsert(resolver);
       EntityBuffer.add(resolver);
@@ -159,7 +159,7 @@ export async function handleMulticoinAddrChanged(
     id: createEventID(log.block.height, log.logIndex),
   });
   resolverEvent.resolver = resolver;
-  resolverEvent.blockNumber = log.block.height;
+  resolverEvent.blockNumber = Number(log.block.height);
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
   resolverEvent.coinType = eventCoinType;
   resolverEvent.addr = decodeHex(event.newAddress);
@@ -298,6 +298,7 @@ export async function handleTextChanged(
   log: Log,
   ctx: any
 ): Promise<void> {
+  console.log("event in handle text changed", event.node);
   let resolver = await _getOrCreateResolver(event.node, log.address, ctx);
   let key = event.key;
   if (resolver.texts == null) {
