@@ -15,7 +15,9 @@ import {
   VersionChanged,
 } from "../model";
 import { createEventID } from "../utils";
-import { decodeHex } from "@subsquid/evm-processor";
+import { DataHandlerContext, decodeHex } from "@subsquid/evm-processor";
+import { Store } from "../db";
+import { EntityBuffer } from "../entityBuffer";
 
 function _createResolverID(node: string, resolver: string): string {
   return resolver.concat("-").concat(node);
@@ -27,20 +29,21 @@ function _createEventID(blockNumber: number, logIndex: number): string {
 async function _getOrCreateResolver(
   node: string,
   address: string,
-  ctx: any
+  ctx: DataHandlerContext<Store>
 ): Promise<Resolver> {
   let id = _createResolverID(node, address);
-  let resolver = await ctx.store.findOne(Resolver, {
+  let resolver = await ctx.store.get(Resolver, {
     where: { id },
+    relations: { domain: true },
   });
-  let domain = await ctx.store.findOne(Domain, {
+  let domain = await ctx.store.get(Domain, {
     where: { id: node },
   });
 
-  if (resolver === null || resolver === undefined) {
+  if (resolver === undefined) {
     resolver = new Resolver({ id });
     resolver.domain = domain;
-    resolver.address = address;
+    resolver.address = decodeHex(address);
 
     await ctx.store.upsert(resolver);
   }
@@ -54,24 +57,26 @@ export async function handleABIChanged(
     contentType: bigint;
   },
   log: Log,
-  ctx: any
-): Promise<AbiChanged> {
+  ctx: DataHandlerContext<Store>
+): Promise<void> {
   // Create a new Resolver record or fetch an existing one if it exists
-  let resolver = await ctx.store.findOne(Resolver, {
-    where: { id: _createResolverID(event.node, log.address) },
-  });
+  // let resolver = await ctx.store.get(Resolver, {
+  //   where: { id: _createResolverID(event.node, log.address) },
+  // });
+  // await ctx.store.upsert(resolver)
 
   let resolverEvent = new AbiChanged({
     id: _createEventID(log.block.height, log.logIndex),
   });
 
   // Associate the resolver with the ABIChanged event
-  resolverEvent.resolver = resolver;
+  resolverEvent.resolver.id = _createResolverID(event.node, log.address);
   resolverEvent.blockNumber = log.block.height;
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
   resolverEvent.contentType = event.contentType;
 
-  return resolverEvent;
+  EntityBuffer.add(resolverEvent);
+  // return resolverEvent;
 }
 
 export async function handleAddrChanged(
@@ -80,7 +85,7 @@ export async function handleAddrChanged(
     a: string;
   },
   log: Log,
-  ctx: any
+  ctx: DataHandlerContext<Store>
 ) {
   let account = new Account({ id: event.a });
   await ctx.store.upsert(account);
@@ -90,9 +95,9 @@ export async function handleAddrChanged(
   });
 
   // Check if the Domain with the specified ID exists
-  let domain = await ctx.store.findOne(Domain, {
+  let domain = await ctx.store.get(Domain, {
     where: { id: event.node },
-    relations: ["resolvedAddress"],
+    relations: { resolver: true },
   });
 
   if (domain) {
@@ -102,11 +107,13 @@ export async function handleAddrChanged(
 
   resolver.address = decodeHex(log.address);
   resolver.addr = account;
-  await ctx.store.upsert(resolver);
+  EntityBuffer.add(resolver);
+  // await ctx.store.upsert(resolver);
 
-  if (domain && domain.resolver == resolver.id) {
+  if (domain && domain.resolver?.id == resolver.id) {
     domain.resolvedAddress = account;
-    await ctx.store.upsert(domain);
+    // await ctx.store.upsert(domain);
+    EntityBuffer.add(domain);
   }
 
   let resolverEvent = new AddrChanged({
@@ -119,7 +126,8 @@ export async function handleAddrChanged(
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
   resolverEvent.addr = account;
 
-  return resolverEvent;
+  // return resolverEvent;
+  EntityBuffer.add(resolverEvent);
 }
 
 export async function handleMulticoinAddrChanged(
@@ -129,19 +137,21 @@ export async function handleMulticoinAddrChanged(
     newAddress: string;
   },
   log: Log,
-  ctx: any
+  ctx: DataHandlerContext<Store>
 ) {
   let resolver = await _getOrCreateResolver(event.node, log.address, ctx);
 
   let eventCoinType = event.coinType;
   if (resolver.coinTypes == null) {
     resolver.coinTypes = [eventCoinType];
+    EntityBuffer.add(resolver);
   } else {
     let coinTypes: bigint[] = resolver.coinTypes as bigint[];
     if (!coinTypes.includes(eventCoinType)) {
       coinTypes.push(eventCoinType);
       resolver.coinTypes = coinTypes;
-      await ctx.store.upsert(resolver);
+      // await ctx.store.upsert(resolver);
+      EntityBuffer.add(resolver);
     }
   }
 
@@ -154,7 +164,8 @@ export async function handleMulticoinAddrChanged(
   resolverEvent.coinType = eventCoinType;
   resolverEvent.addr = decodeHex(event.newAddress);
 
-  return resolverEvent;
+  // return resolverEvent;
+  EntityBuffer.add(resolverEvent);
 }
 
 export function handleAuthorisationChanged(
@@ -165,7 +176,7 @@ export function handleAuthorisationChanged(
     isAuthorised: boolean;
   },
   log: Log
-): AuthorisationChanged {
+): void {
   let resolverEvent = new AuthorisationChanged({
     id: _createEventID(log.block.height, log.logIndex),
   });
@@ -176,7 +187,8 @@ export function handleAuthorisationChanged(
   resolverEvent.target = decodeHex(event.target);
   resolverEvent.isAuthorized = event.isAuthorised;
 
-  return resolverEvent;
+  // return resolverEvent;
+  EntityBuffer.add(resolverEvent);
 }
 
 export async function handleContentHashChanged(
@@ -186,9 +198,10 @@ export async function handleContentHashChanged(
   },
   log: Log,
   ctx: any
-): Promise<ContenthashChanged> {
+): Promise<void> {
   let resolver = await _getOrCreateResolver(event.node, log.address, ctx);
   resolver.contentHash = decodeHex(event.hash);
+  // EntityBuffer.add(resolver);
   await ctx.store.upsert(resolver);
 
   let resolverEvent = new ContenthashChanged({
@@ -199,7 +212,8 @@ export async function handleContentHashChanged(
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
   resolverEvent.hash = decodeHex(event.hash);
 
-  return resolverEvent;
+  // return resolverEvent;
+  EntityBuffer.add(resolverEvent);
 }
 
 export async function handleInterfaceChanged(
@@ -247,7 +261,8 @@ export async function handleNameChanged(
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
   resolverEvent.name = event.name;
 
-  return resolverEvent;
+  // return resolverEvent;
+  EntityBuffer.add(resolverEvent);
 }
 
 export async function handlePubkeyChanged(
@@ -258,7 +273,7 @@ export async function handlePubkeyChanged(
   },
   log: Log,
   ctx: any
-): Promise<PubkeyChanged> {
+): Promise<void> {
   let resolverEvent = new PubkeyChanged({
     id: _createEventID(log.block.height, log.logIndex),
   });
@@ -270,7 +285,8 @@ export async function handlePubkeyChanged(
   resolverEvent.x = decodeHex(event.x);
   resolverEvent.y = decodeHex(event.y);
 
-  return resolverEvent;
+  // return resolverEvent;
+  EntityBuffer.add(resolverEvent);
 }
 
 export async function handleTextChanged(
@@ -281,7 +297,7 @@ export async function handleTextChanged(
   },
   log: Log,
   ctx: any
-): Promise<TextChanged> {
+): Promise<void> {
   let resolver = await _getOrCreateResolver(event.node, log.address, ctx);
   let key = event.key;
   if (resolver.texts == null) {
@@ -305,7 +321,8 @@ export async function handleTextChanged(
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
   resolverEvent.key = event.key;
 
-  return resolverEvent;
+  // return resolverEvent;
+  EntityBuffer.add(resolverEvent);
 }
 
 export async function handleTextChangedWithValue(
@@ -317,7 +334,7 @@ export async function handleTextChangedWithValue(
   },
   log: Log,
   ctx: any
-): Promise<TextChanged> {
+): Promise<void> {
   let resolver = await _getOrCreateResolver(event.node, log.address, ctx);
 
   let key = event.key;
@@ -342,7 +359,8 @@ export async function handleTextChangedWithValue(
   resolverEvent.key = event.key;
   resolverEvent.value = event.value;
 
-  return resolverEvent;
+  // return resolverEvent;
+  EntityBuffer.add(resolverEvent);
 }
 
 export async function handleVersionChanged(
@@ -351,7 +369,7 @@ export async function handleVersionChanged(
     newVersion: bigint;
   },
   log: Log,
-  ctx: any
+  ctx: DataHandlerContext<Store>
 ): Promise<void> {
   let resolverEvent = new VersionChanged({
     id: createEventID(log.block.height, log.logIndex),
@@ -360,9 +378,14 @@ export async function handleVersionChanged(
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
   resolverEvent.resolver.id = _createResolverID(event.node, log.address);
   resolverEvent.version = event.newVersion;
-  await ctx.store.upsert(resolverEvent);
 
-  let domain = ctx.store.get(Domain, event.node);
+  EntityBuffer.add(resolverEvent);
+  // await ctx.store.upsert(resolverEvent);
+
+  let domain = await ctx.store.get(Domain, {
+    where: { id: event.node },
+    relations: { resolver: true },
+  });
   if (domain && domain.resolver === resolverEvent.resolver) {
     domain.resolvedAddress = null;
     await ctx.store.upsert(domain);
@@ -374,5 +397,6 @@ export async function handleVersionChanged(
   resolver.texts = null;
   resolver.coinTypes = null;
 
-  await ctx.store.upsert(resolver);
+  // await ctx.store.upsert(resolver);
+  EntityBuffer.add(resolver);
 }

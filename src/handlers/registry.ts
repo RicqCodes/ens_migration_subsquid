@@ -1,4 +1,4 @@
-import { decodeHex } from "@subsquid/evm-processor";
+import { DataHandlerContext, decodeHex } from "@subsquid/evm-processor";
 import {
   Account,
   Domain,
@@ -10,6 +10,9 @@ import {
 } from "../model";
 import { Log } from "../processor";
 import { EMPTY_ADDRESS, ROOT_NODE, createEventID, makeSubnode } from "../utils";
+import { Store } from "../db";
+import { EntityBuffer } from "../entityBuffer";
+import { Contract as ens } from "../abi/NameWrapper";
 
 const BIG_INT_ZERO: bigint = 0n;
 
@@ -21,8 +24,8 @@ async function _createDomain(
   const owner = new Account({ id: EMPTY_ADDRESS });
   await ctx.store.upsert(owner);
   // Create a new domain entity
-  const domain = new Domain();
-  domain.id = node;
+  let domain = new Domain({ id: node });
+
   if (node == ROOT_NODE) {
     domain.owner = owner;
     domain.isMigrated = true;
@@ -34,39 +37,40 @@ async function _createDomain(
 
 async function _getDomain(
   node: string,
-  ctx: any,
+  ctx: DataHandlerContext<Store>,
   timestamp: bigint = BIG_INT_ZERO
 ): Promise<Domain> {
-  let domain = await ctx.store.findOne(Domain, {
+  let domain = await ctx.store.get(Domain, {
     where: {
       id: node,
     },
-    relations: ["parent", "owner", "resolver"],
+    relations: { parent: true, owner: true, resolver: true },
   });
 
-  if ((domain === null || domain === undefined) && node == ROOT_NODE) {
+  if (domain === undefined && node == ROOT_NODE) {
     return await _createDomain(node, timestamp, ctx);
+  } else {
+    // conssole.log("returned domain", domain);
+    return domain!;
   }
-  // conssole.log("returned domain", domain);
-  return domain;
 }
 
 async function _recurseDomainDelete(
   domain: Domain,
-  ctx: any
+  ctx: DataHandlerContext<Store>
 ): Promise<string | null> {
   if (
-    (domain.resolver == null ||
+    (domain.resolver == undefined ||
       domain.resolver?.id.split("-")[0] == EMPTY_ADDRESS) &&
     domain.owner?.id == EMPTY_ADDRESS &&
     domain.subdomainCount == 0
   ) {
-    const parentDomain = await ctx.store.findOne(Domain, {
+    const parentDomain = await ctx.store.get(Domain, {
       where: {
-        id: domain.parent!.id,
+        id: domain.parent?.id,
       },
     });
-    if (parentDomain != null) {
+    if (parentDomain != undefined) {
       parentDomain.subdomainCount = parentDomain.subdomainCount - 1;
       await ctx.store.upsert(parentDomain);
       return _recurseDomainDelete(parentDomain, ctx);
@@ -80,13 +84,14 @@ async function _recurseDomainDelete(
 
 async function _saveDomain(domain: Domain, ctx: any) {
   await _recurseDomainDelete(domain, ctx);
+  // EntityBuffer.add(domain);
   await ctx.store.upsert(domain);
 }
 
 async function _handleNewOwner(
   event: { node: string; label: string; owner: string },
   log: Log,
-  ctx: any,
+  ctx: DataHandlerContext<Store>,
   isMigrated: boolean
 ) {
   let account = new Account({ id: event.owner });
@@ -95,53 +100,54 @@ async function _handleNewOwner(
   let subnode = makeSubnode(event.node, event.label);
   let domain = await _getDomain(subnode, ctx, BigInt(log.block.timestamp));
   let parent = await _getDomain(event.node, ctx);
-
-  if (domain === null || domain === undefined) {
+  if (domain === undefined) {
     domain = new Domain({ id: subnode });
     domain.createdAt = BigInt(log.block.timestamp);
     domain.subdomainCount = 0;
   }
 
-  if (
-    (domain.parent === null || domain.parent === undefined) &&
-    parent !== null
-  ) {
-    domain.parent = parent;
+  if (domain.parent === undefined && parent !== undefined) {
+    // domain.parent = parent;
     parent.subdomainCount = parent.subdomainCount + 1;
+    // EntityBuffer.add(parent);
     await ctx.store.upsert(parent);
   }
 
   if (domain.name == null) {
     // Get label and node names
-    let label = await ctx.store.findOne(Domain, {
+    let label = await ctx.store.get(Domain, {
       where: {
         labelName: event.label,
       },
     });
-    if (label != null) {
-      domain.labelName = label;
+
+    if (label != undefined) {
+      domain!.labelName = label.labelName;
     }
 
-    if (label === null || label === undefined) {
-      label = "[" + event.label.slice(2) + "]";
+    let newLabel = "";
+    if (label === undefined) {
+      newLabel = "[" + event.label.slice(2) + "]";
     }
+
     if (
       event.node ==
       "0x0000000000000000000000000000000000000000000000000000000000000000"
     ) {
-      domain.name = label;
+      domain!.name = label?.labelName || newLabel;
     } else {
       parent = parent!;
-      let name = parent.name;
-      if (label && name) {
-        domain.name = label + "." + name;
+      let name = parent?.name;
+      if ((label || newLabel) && name) {
+        domain.name = label?.labelName
+          ? label?.labelName
+          : newLabel + "." + name;
       }
     }
   }
   domain.owner = account;
   domain.labelhash = decodeHex(event.label);
   domain.isMigrated = isMigrated;
-
   await _saveDomain(domain, ctx);
 
   let domainEvent = new NewOwner({
@@ -153,56 +159,68 @@ async function _handleNewOwner(
   domainEvent.domain = domain;
   domainEvent.owner = account;
 
-  return domainEvent;
+  EntityBuffer.add(domainEvent);
 }
 
 export async function handleNewResolver(
   event: { node: string; resolver: string },
   log: Log,
-  ctx: any
-): Promise<NewResolver> {
+  ctx: DataHandlerContext<Store>
+): Promise<void> {
   let id: string | null;
+  let domain = await _getDomain(event.node, ctx)!;
 
-  if (event.resolver === "0x0") {
-    id = null;
-  } else {
-    id = event.resolver.concat("-").concat(event.node);
-  }
+  try {
+    console.log("events in handle new resolver", event);
 
-  let node = event.node;
-  let domain: Domain = await _getDomain(node, ctx)!;
-  let resolver: Resolver = await ctx.store.findOne(Resolver, {
-    where: { id },
-    relations: ["domain"],
-  });
+    if (event.resolver === "0x0") {
+      id = null;
+    } else {
+      id = event.resolver.concat("-").concat(event.node);
+    }
 
-  if (id) {
-    if (resolver == null) {
-      resolver = new Resolver({ id });
-      resolver.domain = domain;
-      resolver.address = decodeHex(event.resolver);
+    let resolver;
 
+    if (id) {
+      resolver = await ctx.store.get(Resolver, {
+        where: { id },
+        relations: { domain: true },
+      });
+      if (resolver == undefined) {
+        resolver = new Resolver({ id });
+        resolver.domain = domain;
+        resolver.address = decodeHex(event.resolver);
+
+        await ctx.store.upsert(resolver);
+
+        domain.resolvedAddress = null;
+      } else {
+        domain.resolvedAddress = resolver.addr;
+      }
+    } else {
+      resolver = new Resolver({ id: EMPTY_ADDRESS });
       await ctx.store.upsert(resolver);
       domain.resolvedAddress = null;
-      domain.resolver = resolver;
-    } else {
-      domain.resolvedAddress = resolver.addr;
     }
-  } else {
+
+    await _saveDomain(domain, ctx);
+
+    let domainEvent = new NewResolver({
+      id: createEventID(log.block.height, log.logIndex),
+    });
+    domainEvent.blockNumber = log.block.height;
+    domainEvent.transactionID = decodeHex(log.transaction?.hash!);
+    domainEvent.domain = domain;
+    domainEvent!.resolver = resolver;
+
+    EntityBuffer.add(domainEvent);
+  } catch (err) {
+    console.error("Error during resolver handling:", err);
+
+    // Set other fields to null or handle them as needed
     domain.resolvedAddress = null;
+    await _saveDomain(domain, ctx);
   }
-
-  await _saveDomain(domain, ctx);
-
-  let domainEvent = new NewResolver({
-    id: createEventID(log.block.height, log.logIndex),
-  });
-  domainEvent.blockNumber = log.block.height;
-  domainEvent.transactionID = decodeHex(log.transaction?.hash!);
-  domainEvent.domain = domain;
-  domainEvent.resolver = id ? resolver : new Resolver({ id: EMPTY_ADDRESS });
-
-  return domainEvent;
 }
 
 export async function handleNewTTL(
@@ -211,8 +229,8 @@ export async function handleNewTTL(
     ttl: bigint;
   },
   log: Log,
-  ctx: any
-): Promise<NewTTL> {
+  ctx: DataHandlerContext<Store>
+): Promise<void> {
   let node = event.node;
   let domain = await _getDomain(node, ctx);
   // For the edge case that a domain's owner and resolver are set to empty
@@ -227,10 +245,10 @@ export async function handleNewTTL(
   });
   domainEvent.blockNumber = log.block.height;
   domainEvent.transactionID = decodeHex(log.transaction?.hash!);
-  domainEvent.domain.id = node;
+  domainEvent.domain = domain;
   domainEvent.ttl = event.ttl;
 
-  return domainEvent;
+  EntityBuffer.add(domainEvent);
 }
 
 export async function handleTransfer(
@@ -239,8 +257,8 @@ export async function handleTransfer(
     owner: string;
   },
   log: Log,
-  ctx: any
-): Promise<Transfer> {
+  ctx: DataHandlerContext<Store>
+): Promise<void> {
   let node = event.node;
   let account = new Account({ id: event.owner });
   await ctx.store.upsert(account);
@@ -259,7 +277,8 @@ export async function handleTransfer(
   domainEvent.domain = domain;
   domainEvent.owner = account;
 
-  return domainEvent;
+  EntityBuffer.add(domainEvent);
+  // return domainEvent;
 }
 
 export async function handleNewOwner(
@@ -274,12 +293,12 @@ export async function handleNewOwnerOldRegistry(
   event: { node: string; label: string; owner: string },
   log: Log,
   ctx: any
-): Promise<NewOwner | undefined> {
+): Promise<void> {
   let subnode = makeSubnode(event.node, event.label);
   let domain = await _getDomain(subnode, ctx, BigInt(log.block.timestamp));
 
-  if (domain == null || domain.isMigrated == false) {
-    return await _handleNewOwner(event, log, ctx, false);
+  if (domain == undefined || domain.isMigrated == false) {
+    await _handleNewOwner(event, log, ctx, false);
   }
 }
 
@@ -287,13 +306,11 @@ export async function handleNewResolverOldRegistry(
   event: { node: string; resolver: string },
   log: Log,
   ctx: any
-): Promise<NewResolver | undefined> {
+): Promise<void> {
   let node = event.node;
-  console.log("node", node);
   let domain = await _getDomain(node, ctx, BigInt(log.block.timestamp))!;
-  console.log("domain", domain);
   if (node == ROOT_NODE || !domain.isMigrated) {
-    return await handleNewResolver(event, log, ctx);
+    await handleNewResolver(event, log, ctx);
   }
 }
 export async function handleNewTTLOldRegistry(
@@ -303,10 +320,10 @@ export async function handleNewTTLOldRegistry(
   },
   log: Log,
   ctx: any
-): Promise<NewTTL | undefined> {
+): Promise<void> {
   let domain = await _getDomain(event.node, ctx)!;
   if (domain.isMigrated == false) {
-    return await handleNewTTL(event, log, ctx);
+    await handleNewTTL(event, log, ctx);
   }
 }
 
@@ -317,9 +334,9 @@ export async function handleTransferOldRegistry(
   },
   log: Log,
   ctx: any
-): Promise<Transfer | undefined> {
+): Promise<void> {
   let domain = await _getDomain(event.node, ctx)!;
-  if (domain.isMigrated == false) {
-    return await handleTransfer(event, log, ctx);
+  if (domain?.isMigrated == false) {
+    await handleTransfer(event, log, ctx);
   }
 }

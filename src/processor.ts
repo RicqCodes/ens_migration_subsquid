@@ -46,7 +46,7 @@ export const processor = new EvmBatchProcessor()
     },
   })
   .setBlockRange({
-    from: 3327417,
+    from: 3000000,
   })
   //   .setBlockRange({
   //     from: 3796301,

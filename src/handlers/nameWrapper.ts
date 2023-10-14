@@ -11,7 +11,9 @@ import {
 } from "../model";
 import { Log } from "../processor";
 import { ETH_NODE, checkValidLabel, createEventID } from "../utils";
-import { decodeHex } from "@subsquid/evm-processor";
+import { decodeHex, DataHandlerContext } from "@subsquid/evm-processor";
+import { Store } from "../db";
+import { EntityBuffer } from "../entityBuffer";
 
 function _decodeName(buf: Uint8Array, ctx: any): Array<string> | null {
   let offset = 0;
@@ -64,8 +66,8 @@ async function createOrLoadAccount(
   address: string,
   ctx: any
 ): Promise<Account> {
-  let account = await ctx.store.findOne(Account, { where: { id: address } });
-  if (account == null) {
+  let account = await ctx.store.get(Account, { where: { id: address } });
+  if (account == undefined) {
     account = new Account({ id: address });
     ctx.store.upsert(account);
   }
@@ -73,19 +75,22 @@ async function createOrLoadAccount(
   return account;
 }
 
-async function createOrLoadDomain(node: string, ctx: any): Promise<Domain> {
-  let domain = await ctx.store.findOne(Domain, {
+async function createOrLoadDomain(
+  node: string,
+  ctx: DataHandlerContext<Store>
+): Promise<Domain> {
+  let domain = await ctx.store.get(Domain, {
     where: { id: node },
-    relations: [
-      "parent",
-      "owner",
-      "resolver",
-      "resolvedAddress",
-      "registrant",
-      "wrappedOwner",
-    ],
+    relations: {
+      parent: true,
+      owner: true,
+      resolver: true,
+      resolvedAddress: true,
+      registrant: true,
+      wrappedOwner: true,
+    },
   });
-  if (domain == null) {
+  if (domain == undefined) {
     domain = new Domain({ id: node });
     await ctx.store.upsert(domain);
   }
@@ -99,34 +104,37 @@ async function _makeWrappedTransfer(
   eventID: string,
   node: BigInt,
   to: string,
-  ctx: any
-): Promise<WrappedTransfer> {
+  ctx: DataHandlerContext<Store>
+): Promise<void> {
   const _to = await createOrLoadAccount(to, ctx);
   const namehash = "0x" + node.toString().slice(2).padStart(64, "0");
   const domain = await createOrLoadDomain(namehash, ctx);
-  let wrappedDomain = await ctx.store.findOne(WrappedDomain, {
+  let wrappedDomain = await ctx.store.get(WrappedDomain, {
     where: { id: namehash },
+    relations: { owner: true },
   });
 
   // new registrations emit the Transfer` event before the NameWrapped event
   // so we need to create the WrappedDomain entity here
-  if (wrappedDomain == null) {
+  if (wrappedDomain == undefined) {
     wrappedDomain = new WrappedDomain({ id: namehash });
     wrappedDomain.domain = domain;
     wrappedDomain.expiryDate = BigInt(0);
     wrappedDomain.fuses = 0;
   }
   wrappedDomain.owner = _to;
-  await ctx.store.upsert(wrappedDomain);
+  EntityBuffer.add(wrappedDomain);
+  // await ctx.store.upsert(wrappedDomain);
   domain.wrappedOwner = _to;
-  await ctx.store.upsert(domain);
+  EntityBuffer.add(domain);
+  // await ctx.store.upsert(domain);
   const wrappedTransfer = new WrappedTransfer({ id: eventID });
   wrappedTransfer.domain = domain;
   wrappedTransfer.blockNumber = blockNumber;
   wrappedTransfer.transactionID = decodeHex(transactionID);
   wrappedTransfer.owner = _to;
-
-  return wrappedTransfer;
+  EntityBuffer.add(wrappedTransfer);
+  // return wrappedTransfer;
 }
 
 export async function handleNameWrapped(
@@ -138,7 +146,7 @@ export async function handleNameWrapped(
     expiry: bigint;
   },
   log: Log,
-  ctx: any
+  ctx: DataHandlerContext<Store>
 ) {
   let decoded = _decodeName(decodeHex(event.name), ctx);
   let label: string | null = null;
@@ -162,7 +170,8 @@ export async function handleNameWrapped(
     domain.expiryDate = event.expiry;
   }
   domain.wrappedOwner = owner;
-  await ctx.store.upsert(domain);
+  EntityBuffer.add(domain);
+  // await ctx.store.upsert(domain);
 
   let wrappedDomain = new WrappedDomain({ id: event.node });
   wrappedDomain.domain = domain;
@@ -171,7 +180,8 @@ export async function handleNameWrapped(
   wrappedDomain.owner = owner;
   wrappedDomain.name = name;
 
-  await ctx.store.upsert(wrappedDomain);
+  // await ctx.store.upsert(wrappedDomain);
+  EntityBuffer.add(wrappedDomain);
 
   let nameWrappedEvent = new NameWrapped({
     id: createEventID(log.block.height, log.logIndex),
@@ -184,7 +194,8 @@ export async function handleNameWrapped(
   nameWrappedEvent.blockNumber = log.block.height;
   nameWrappedEvent.transactionID = decodeHex(log.transaction?.hash!);
 
-  return nameWrappedEvent;
+  // return nameWrappedEvent;
+  EntityBuffer.add(nameWrappedEvent);
 }
 
 export async function handleNameUnwrapped(
@@ -193,7 +204,7 @@ export async function handleNameUnwrapped(
     owner: string;
   },
   log: Log,
-  ctx: any
+  ctx: DataHandlerContext<Store>
 ) {
   let owner = await createOrLoadAccount(event.owner, ctx);
 
@@ -202,6 +213,7 @@ export async function handleNameUnwrapped(
   if (domain.expiryDate && domain.parent!.id !== ETH_NODE) {
     domain.expiryDate = null;
   }
+
   ctx.store.upsert(domain);
 
   let nameUnwrappedEvent = new NameUnwrapped({
@@ -211,10 +223,10 @@ export async function handleNameUnwrapped(
   nameUnwrappedEvent.owner = owner;
   nameUnwrappedEvent.blockNumber = log.block.height;
   nameUnwrappedEvent.transactionID = decodeHex(log.transaction?.hash!);
-
+  EntityBuffer.add(nameUnwrappedEvent);
   ctx.store.remove(WrappedDomain, event.node);
 
-  return nameUnwrappedEvent;
+  // return nameUnwrappedEvent;
 }
 
 export async function handleFusesSet(
@@ -223,22 +235,24 @@ export async function handleFusesSet(
     fuses: number;
   },
   log: Log,
-  ctx: any
+  ctx: DataHandlerContext<Store>
 ) {
-  let wrappedDomain = await ctx.store.findOne(WrappedDomain, {
+  let wrappedDomain = await ctx.store.get(WrappedDomain, {
     where: { id: event.node },
   });
 
   const domain = await createOrLoadDomain(event.node, ctx);
   if (wrappedDomain) {
     wrappedDomain.fuses = Number(event.fuses);
-    await ctx.store.upsert(wrappedDomain);
+    // await ctx.store.upsert(wrappedDomain);
+    EntityBuffer.add(wrappedDomain);
 
     if (wrappedDomain.expiryDate && checkPccBurned(wrappedDomain.fuses)) {
       let domain = await createOrLoadDomain(event.node, ctx);
       if (!domain.expiryDate || wrappedDomain.expiryDate > domain.expiryDate!) {
         domain.expiryDate = wrappedDomain.expiryDate;
-        await ctx.store.upsert(domain);
+        EntityBuffer.add(domain);
+        // await ctx.store.upsert(domain);
       }
     }
   }
@@ -249,8 +263,8 @@ export async function handleFusesSet(
   fusesBurnedEvent.fuses = Number(event.fuses);
   fusesBurnedEvent.blockNumber = log.block.height;
   fusesBurnedEvent.transactionID = decodeHex(log.transaction?.hash!);
-
-  return fusesBurnedEvent;
+  EntityBuffer.add(domain);
+  // return fusesBurnedEvent;
 }
 
 export async function handleExpiryExtended(
@@ -259,9 +273,9 @@ export async function handleExpiryExtended(
     expiry: bigint;
   },
   log: Log,
-  ctx: any
+  ctx: DataHandlerContext<Store>
 ) {
-  let wrappedDomain = await ctx.store.findOne(WrappedDomain, {
+  let wrappedDomain = await ctx.store.get(WrappedDomain, {
     where: { id: event.node },
   });
 
@@ -269,12 +283,14 @@ export async function handleExpiryExtended(
 
   if (wrappedDomain) {
     wrappedDomain.expiryDate = event.expiry;
-    await ctx.store.upsert(wrappedDomain);
+    EntityBuffer.add(wrappedDomain);
+    // await ctx.store.upsert(wrappedDomain);
 
     if (checkPccBurned(wrappedDomain.fuses)) {
       if (!domain.expiryDate || event.expiry > domain.expiryDate!) {
         domain.expiryDate = event.expiry;
-        await ctx.store.upsert(domain);
+        EntityBuffer.add(domain);
+        // await ctx.store.upsert(domain);
       }
     }
   }
@@ -287,7 +303,8 @@ export async function handleExpiryExtended(
   expiryExtendedEvent.blockNumber = log.block.height;
   expiryExtendedEvent.transactionID = decodeHex(log.transaction?.hash!);
 
-  return expiryExtendedEvent;
+  EntityBuffer.add(expiryExtendedEvent);
+  // return expiryExtendedEvent;
 }
 
 export async function handleTransferSingle(
@@ -301,7 +318,7 @@ export async function handleTransferSingle(
   log: Log,
   ctx: any
 ) {
-  const wrappedTransfer = await _makeWrappedTransfer(
+  await _makeWrappedTransfer(
     log.block.height,
     log.transaction?.hash!,
     createEventID(log.block.height, log.logIndex).concat("-0"),
@@ -309,8 +326,6 @@ export async function handleTransferSingle(
     event.to,
     ctx
   );
-
-  return wrappedTransfer;
 }
 
 export async function handleTransferBatch(
@@ -322,8 +337,8 @@ export async function handleTransferBatch(
   },
   log: Log,
   ctx: any
-): Promise<WrappedTransfer[]> {
-  const transferBatch = [];
+): Promise<void> {
+  // const transferBatch = [];
   for (let i = 0; i < event.ids.length; i++) {
     const wrappedTransfer = await _makeWrappedTransfer(
       log.block.height,
@@ -335,8 +350,8 @@ export async function handleTransferBatch(
       event.to,
       ctx
     );
-    transferBatch.push(wrappedTransfer);
+    // transferBatch.push(wrappedTransfer);
   }
 
-  return transferBatch;
+  // return transferBatch;
 }

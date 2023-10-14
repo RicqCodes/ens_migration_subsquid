@@ -1,4 +1,4 @@
-import { decodeHex } from "@subsquid/evm-processor";
+import { decodeHex, DataHandlerContext } from "@subsquid/evm-processor";
 import {
   Account,
   Registration,
@@ -19,6 +19,8 @@ import {
   uint256ToByteArray,
   uint8ArrayToHex,
 } from "../utils";
+import { Store } from "../db";
+import { EntityBuffer } from "../entityBuffer";
 
 var rootNode = byteArrayFromHex(ETH_NODE);
 const GRACE_PERIOD_SECONDS = BigInt(7776000); // 90 days
@@ -27,30 +29,31 @@ async function _setNamePreimage(
   name: string,
   label: string,
   cost: BigInt,
-  ctx: any
+  ctx: DataHandlerContext<Store>
 ): Promise<Registration | undefined> {
   if (!checkValidLabel(name, ctx)) {
     return;
   }
 
-  let domain = await ctx.store.findOne(Domain, {
+  let domain = await ctx.store.get(Domain, {
     where: {
       id: makeSubnode(rootNode.toString(), label.toString()),
     },
   })!;
 
-  if (domain.labelName !== name) {
-    domain.labelName = name;
-    domain.name = name + ".eth";
-    await ctx.store.upsert(domain);
+  if (domain?.labelName !== name) {
+    domain!.labelName = name;
+    domain!.name = name + ".eth";
+    EntityBuffer.add(domain!);
+    // await ctx.store.upsert(domain!);
   }
 
-  let registration = ctx.store.findOneBy(Registration, { label });
-  if (registration == null) return;
+  let registration = await ctx.store.get(Registration, label);
+  if (registration == undefined) return;
   registration.labelName = name;
-  registration.cost = cost;
-
-  return registration;
+  registration.cost = BigInt(cost.toString());
+  EntityBuffer.add(registration);
+  // return registration;
 }
 
 export async function handleNameRegistered(
@@ -60,47 +63,54 @@ export async function handleNameRegistered(
     expires: bigint;
   },
   log: Log,
-  ctx: any
-): Promise<NameRegistered> {
+  ctx: DataHandlerContext<Store>
+): Promise<void> {
   let account = new Account({ id: event.owner });
   ctx.store.upsert(account);
 
   let label = byteArrayFromHex(event.id.toString());
   let registration = new Registration({ id: uint8ArrayToHex(label) });
-  let domain = await ctx.store.findOne(Domain, {
+  let domain = await ctx.store.get(Domain, {
     where: {
       id: makeSubnode(rootNode.toString(), label.toString()),
     },
+    relations: { registrant: true },
   });
 
-  registration.domain = domain.id;
+  registration.domain = domain!;
   registration.registrationDate = BigInt(log.block.timestamp);
   registration.expiryDate = event.expires;
-  registration.registrant.id = account.id;
+  registration.registrant = account;
 
-  domain.registrant = account.id;
-  domain.expiryDate = event.expires + GRACE_PERIOD_SECONDS;
+  domain!.registrant = account;
+  domain!.expiryDate = event.expires + GRACE_PERIOD_SECONDS;
 
-  let labelName = await ctx.store.findOneBy(Domain, { label });
+  let labelName = await ctx.store.findOneBy(Domain, {
+    labelName: uint8ArrayToHex(label),
+  });
 
-  if (labelName != null) {
-    domain.labelName = labelName;
-    domain.name = labelName! + ".eth";
-    registration.labelName = labelName;
+  if (labelName != undefined) {
+    domain!.labelName = labelName.name;
+    domain!.name = labelName! + ".eth";
+    registration!.labelName = labelName.name;
   }
-  await ctx.store.upsert(domain);
-  await ctx.store.upsert(registration);
+
+  EntityBuffer.add(domain!);
+  EntityBuffer.add(registration);
+  // await ctx.store.upsert(domain);
+  // await ctx.store.upsert(registration);
 
   let registrationEvent = new NameRegistered({
     id: createEventID(log.block.height, log.logIndex),
   });
-  registrationEvent.registration.id = registration.id;
+  registrationEvent.registration = registration;
   registrationEvent.blockNumber = log.block.height;
   registrationEvent.transactionID = decodeHex(log.transaction?.hash!);
-  registrationEvent.registrant.id = account.id;
+  registrationEvent.registrant = account;
   registrationEvent.expiryDate = event.expires;
 
-  return registrationEvent;
+  // return registrationEvent;
+  EntityBuffer.add(registrationEvent);
 }
 
 export async function handleNameRenewed(
@@ -109,34 +119,36 @@ export async function handleNameRenewed(
     expires: bigint;
   },
   log: Log,
-  ctx: any
-): Promise<NameRenewed> {
+  ctx: DataHandlerContext<Store>
+): Promise<void> {
   let label = byteArrayFromHex(event.id.toString());
-  let registration = await ctx.store.findOne(Registration, {
+  let registration = await ctx.store.get(Registration, {
     where: {
       id: uint8ArrayToHex(label),
     },
-  });
-
-  let domain = await ctx.store.get(Domain, {
-    id: makeSubnode(rootNode.toString(), label.toString()),
   })!;
 
-  registration.expiryDate = event.expires;
-  domain.expiryDate = event.expires + GRACE_PERIOD_SECONDS;
+  let domain = await ctx.store.get(Domain, {
+    where: { id: makeSubnode(rootNode.toString(), label.toString()) },
+  })!;
 
-  await ctx.store.upsert(domain);
-  await ctx.store.upsert(registration);
+  registration!.expiryDate = event.expires;
+  domain!.expiryDate = event.expires + GRACE_PERIOD_SECONDS;
+
+  EntityBuffer.add(domain!);
+  EntityBuffer.add(registration!);
+  // await ctx.store.upsert(domain);
+  // await ctx.store.upsert(registration);
 
   let registrationEvent = new NameRenewed({
     id: createEventID(log.block.height, log.logIndex),
   });
-  registrationEvent.registration = registration.id;
+  registrationEvent.registration = registration!;
   registrationEvent.blockNumber = log.block.height;
   registrationEvent.transactionID = decodeHex(log.transaction?.hash!);
   registrationEvent.expiryDate = event.expires;
 
-  return registrationEvent;
+  EntityBuffer.add(registrationEvent);
 }
 
 export async function handleNameTransferred(
@@ -146,41 +158,46 @@ export async function handleNameTransferred(
     tokenId: bigint;
   },
   log: Log,
-  ctx: any
-): Promise<NameTransferred | undefined> {
+  ctx: DataHandlerContext<Store>
+): Promise<void> {
   let account = new Account({ id: event.to });
   await ctx.store.upsert(account);
 
   let label = uint256ToByteArray(BigInt(event.tokenId));
   //   console.log("label", label);
-  let registration = ctx.store.findOne(Registration, {
+  let registration = await ctx.store.get(Registration, {
     where: { id: byteArrayToHex(label) },
+    relations: { registrant: true },
   });
-  if (registration == null) return;
+  if (registration == undefined) return;
 
   let domain = await ctx.store.findOne(Domain, {
     where: {
       id: byteArrayToHex(concat(rootNode, label)),
     },
+    relations: { registrant: true },
   })!;
   console.log("domain", domain);
 
-  registration.registrant = account.id;
-  domain.registrant = account.id;
+  registration!.registrant = account;
+  domain!.registrant = account;
 
-  await ctx.store.upsert(domain);
-  await ctx.store.upsert(registration);
+  EntityBuffer.add(domain!);
+  EntityBuffer.add(registration);
+  // await ctx.store.upsert(domain);
+  // await ctx.store.upsert(registration);
 
   let transferEvent = new NameTransferred({
     id: createEventID(log.block.height, log.logIndex),
   });
   console.log(byteArrayToHex(label), "byteArray from hex");
-  transferEvent.registration.id = byteArrayToHex(label);
+  transferEvent.registration = registration;
   transferEvent.blockNumber = log.block.height;
   transferEvent.transactionID = decodeHex(log.transaction?.hash!);
-  transferEvent.newOwner.id = account.id;
+  transferEvent.newOwner = account;
 
-  return transferEvent;
+  EntityBuffer.add(transferEvent);
+  // return transferEvent;
 }
 
 export async function handleNameRegisteredByController(
@@ -193,16 +210,14 @@ export async function handleNameRegisteredByController(
     expires: bigint;
   },
   log: Log,
-  ctx: any
+  ctx: DataHandlerContext<Store>
 ) {
-  const registration = await _setNamePreimage(
+  await _setNamePreimage(
     event.name,
     event.label,
     event.baseCost + event.premium,
     ctx
   );
-
-  return registration;
 }
 
 export async function handleNameRenewedByController(
@@ -215,14 +230,7 @@ export async function handleNameRenewedByController(
   log: Log,
   ctx: any
 ) {
-  const registration = await _setNamePreimage(
-    event.name,
-    event.label,
-    event.cost,
-    ctx
-  );
-
-  return registration;
+  await _setNamePreimage(event.name, event.label, event.cost, ctx);
 }
 
 export async function handleNameRegisteredByControllerOld(
@@ -234,6 +242,6 @@ export async function handleNameRegisteredByControllerOld(
   },
   log: Log,
   ctx: any
-): Promise<Registration | undefined> {
-  return await _setNamePreimage(event.name, event.label, event.cost, ctx);
+): Promise<void> {
+  await _setNamePreimage(event.name, event.label, event.cost, ctx);
 }
