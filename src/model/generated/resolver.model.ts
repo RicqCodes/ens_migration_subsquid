@@ -49,6 +49,6 @@ export class Resolver {
     /**
      * The set of observed SLIP-44 coin types for this resolver
      */
-    @Column_("jsonb", {nullable: false})
-    coinTypes!: unknown
+    @Column_("jsonb", {nullable: true})
+    coinTypes!: unknown | undefined | null
 }

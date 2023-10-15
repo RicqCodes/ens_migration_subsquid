@@ -123,11 +123,11 @@ async function _makeWrappedTransfer(
     wrappedDomain.fuses = 0;
   }
   wrappedDomain.owner = _to;
-  EntityBuffer.add(wrappedDomain);
-  // await ctx.store.upsert(wrappedDomain);
+  // EntityBuffer.add(wrappedDomain);
+  await ctx.store.upsert(wrappedDomain);
   domain.wrappedOwner = _to;
-  EntityBuffer.add(domain);
-  // await ctx.store.upsert(domain);
+  // EntityBuffer.add(domain);
+  await ctx.store.upsert(domain);
   const wrappedTransfer = new WrappedTransfer({ id: eventID });
   wrappedTransfer.domain = domain;
   wrappedTransfer.blockNumber = blockNumber;
@@ -170,8 +170,8 @@ export async function handleNameWrapped(
     domain.expiryDate = event.expiry;
   }
   domain.wrappedOwner = owner;
-  EntityBuffer.add(domain);
-  // await ctx.store.upsert(domain);
+  // EntityBuffer.add(domain);
+  await ctx.store.upsert(domain);
 
   let wrappedDomain = new WrappedDomain({ id: event.node });
   wrappedDomain.domain = domain;
@@ -180,8 +180,8 @@ export async function handleNameWrapped(
   wrappedDomain.owner = owner;
   wrappedDomain.name = name;
 
-  // await ctx.store.upsert(wrappedDomain);
-  EntityBuffer.add(wrappedDomain);
+  await ctx.store.upsert(wrappedDomain);
+  // EntityBuffer.add(wrappedDomain);
 
   let nameWrappedEvent = new NameWrapped({
     id: createEventID(log.block.height, log.logIndex),

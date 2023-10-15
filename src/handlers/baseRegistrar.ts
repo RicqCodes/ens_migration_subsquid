@@ -21,6 +21,7 @@ import {
 } from "../utils";
 import { Store } from "../db";
 import { EntityBuffer } from "../entityBuffer";
+import { ethers } from "ethers";
 
 var rootNode = byteArrayFromHex(ETH_NODE);
 const GRACE_PERIOD_SECONDS = BigInt(7776000); // 90 days
@@ -35,9 +36,17 @@ async function _setNamePreimage(
     return;
   }
 
+  const concatenatedArray = new Uint8Array(
+    rootNode.length + uint256ToByteArray(BigInt(label)).length
+  );
+  concatenatedArray.set(rootNode, 0);
+  concatenatedArray.set(uint256ToByteArray(BigInt(label)), rootNode.length);
+  // Calculate the keccak256 hash
+  const hash = ethers.keccak256(concatenatedArray);
+
   let domain = await ctx.store.get(Domain, {
     where: {
-      id: makeSubnode(rootNode.toString(), label.toString()),
+      id: hash,
     },
   })!;
 
@@ -68,49 +77,59 @@ export async function handleNameRegistered(
   let account = new Account({ id: event.owner });
   ctx.store.upsert(account);
 
-  let label = byteArrayFromHex(event.id.toString());
-  let registration = new Registration({ id: uint8ArrayToHex(label) });
+  let label = uint256ToByteArray(event.id);
+  let registration = new Registration({ id: byteArrayToHex(label) });
+
+  // Concatenate the byte arrays
+  const concatenatedArray = new Uint8Array(rootNode.length + label.length);
+  concatenatedArray.set(rootNode, 0);
+  concatenatedArray.set(label, rootNode.length);
+  // Calculate the keccak256 hash
+  const hash = ethers.keccak256(concatenatedArray);
+
   let domain = await ctx.store.get(Domain, {
     where: {
-      id: makeSubnode(rootNode.toString(), label.toString()),
+      id: hash,
     },
     relations: { registrant: true },
   });
 
-  registration.domain = domain!;
-  registration.registrationDate = BigInt(log.block.timestamp);
-  registration.expiryDate = event.expires;
-  registration.registrant = account;
+  if (domain !== undefined) {
+    registration.domain = domain!;
+    registration.registrationDate = BigInt(log.block.timestamp);
+    registration.expiryDate = event.expires;
+    registration.registrant = account;
 
-  domain!.registrant = account;
-  domain!.expiryDate = event.expires + GRACE_PERIOD_SECONDS;
+    domain!.registrant = account;
+    domain!.expiryDate = event.expires + GRACE_PERIOD_SECONDS;
 
-  let labelName = await ctx.store.findOneBy(Domain, {
-    labelName: uint8ArrayToHex(label),
-  });
+    let labelName = await ctx.store.findOneBy(Domain, {
+      labelName: byteArrayToHex(label),
+    });
 
-  if (labelName != undefined) {
-    domain!.labelName = labelName.name;
-    domain!.name = labelName! + ".eth";
-    registration!.labelName = labelName.name;
+    if (labelName != undefined) {
+      domain!.labelName = labelName.name;
+      domain!.name = labelName!.name + ".eth";
+      registration!.labelName = labelName.name;
+    }
+
+    EntityBuffer.add(domain!);
+    EntityBuffer.add(registration);
+    // await ctx.store.upsert(domain);
+    // await ctx.store.upsert(registration);
+
+    let registrationEvent = new NameRegistered({
+      id: createEventID(log.block.height, log.logIndex),
+    });
+    registrationEvent.registration = registration;
+    registrationEvent.blockNumber = log.block.height;
+    registrationEvent.transactionID = decodeHex(log.transaction?.hash!);
+    registrationEvent.registrant = account;
+    registrationEvent.expiryDate = event.expires;
+
+    // return registrationEvent;
+    EntityBuffer.add(registrationEvent);
   }
-
-  EntityBuffer.add(domain!);
-  EntityBuffer.add(registration);
-  // await ctx.store.upsert(domain);
-  // await ctx.store.upsert(registration);
-
-  let registrationEvent = new NameRegistered({
-    id: createEventID(log.block.height, log.logIndex),
-  });
-  registrationEvent.registration = registration;
-  registrationEvent.blockNumber = log.block.height;
-  registrationEvent.transactionID = decodeHex(log.transaction?.hash!);
-  registrationEvent.registrant = account;
-  registrationEvent.expiryDate = event.expires;
-
-  // return registrationEvent;
-  EntityBuffer.add(registrationEvent);
 }
 
 export async function handleNameRenewed(
@@ -128,8 +147,15 @@ export async function handleNameRenewed(
     },
   })!;
 
+  // Concatenate the byte arrays
+  const concatenatedArray = new Uint8Array(rootNode.length + label.length);
+  concatenatedArray.set(rootNode, 0);
+  concatenatedArray.set(label, rootNode.length);
+  // Calculate the keccak256 hash
+  const hash = ethers.keccak256(concatenatedArray);
+
   let domain = await ctx.store.get(Domain, {
-    where: { id: makeSubnode(rootNode.toString(), label.toString()) },
+    where: { id: hash },
   })!;
 
   registration!.expiryDate = event.expires;
@@ -164,20 +190,25 @@ export async function handleNameTransferred(
   await ctx.store.upsert(account);
 
   let label = uint256ToByteArray(BigInt(event.tokenId));
-  //   console.log("label", label);
   let registration = await ctx.store.get(Registration, {
     where: { id: byteArrayToHex(label) },
     relations: { registrant: true },
   });
   if (registration == undefined) return;
 
-  let domain = await ctx.store.findOne(Domain, {
+  // Concatenate the byte arrays
+  const concatenatedArray = new Uint8Array(rootNode.length + label.length);
+  concatenatedArray.set(rootNode, 0);
+  concatenatedArray.set(label, rootNode.length);
+  // Calculate the keccak256 hash
+  const hash = ethers.keccak256(concatenatedArray);
+
+  let domain = await ctx.store.get(Domain, {
     where: {
-      id: byteArrayToHex(concat(rootNode, label)),
+      id: hash,
     },
     relations: { registrant: true },
   })!;
-  console.log("domain", domain);
 
   registration!.registrant = account;
   domain!.registrant = account;
@@ -190,7 +221,6 @@ export async function handleNameTransferred(
   let transferEvent = new NameTransferred({
     id: createEventID(log.block.height, log.logIndex),
   });
-  console.log(byteArrayToHex(label), "byteArray from hex");
   transferEvent.registration = registration;
   transferEvent.blockNumber = log.block.height;
   transferEvent.transactionID = decodeHex(log.transaction?.hash!);

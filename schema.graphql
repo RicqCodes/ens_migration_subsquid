@@ -287,7 +287,7 @@ type Resolver @entity {
   "The set of observed text record keys for this resolver"
   texts: [String!]
   "The set of observed SLIP-44 coin types for this resolver"
-  coinTypes: JSON!
+  coinTypes: JSON
 }
 
 interface ResolverEvent @query {

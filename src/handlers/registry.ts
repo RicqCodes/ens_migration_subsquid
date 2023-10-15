@@ -84,8 +84,8 @@ async function _recurseDomainDelete(
 
 async function _saveDomain(domain: Domain, ctx: any) {
   await _recurseDomainDelete(domain, ctx);
-  // EntityBuffer.add(domain);
-  await ctx.store.upsert(domain);
+  EntityBuffer.add(domain);
+  // await ctx.store.upsert(domain);
 }
 
 // async function _handleNewOwner(

@@ -9,14 +9,17 @@ export const EMPTY_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export function makeSubnode(node: string, label: string): string {
   // Concatenate the byte arrays
-  const concatenated = ethers.concat([node, label]);
-
-  // Compute the Keccak-256 hash
-  const keccak256Hash = ethers.keccak256(concatenated);
-
-  // Convert the hash to a hex string
-
-  return keccak256Hash;
+  const concatenatedArray = new Uint8Array(
+    byteArrayFromHex(node.slice(2)).length +
+      byteArrayFromHex(label.slice(2)).length
+  );
+  concatenatedArray.set(byteArrayFromHex(node.slice(2)), 0);
+  concatenatedArray.set(
+    byteArrayFromHex(label.slice(2)),
+    byteArrayFromHex(node.slice(2)).length
+  );
+  // Calculate the keccak256 hash
+  return ethers.keccak256(concatenatedArray);
 }
 
 export type ByteArray = Uint8Array;
@@ -88,12 +91,9 @@ export function uint8ArrayToHex(uint8Array: Uint8Array): string {
 
 // Define byteArrayToHex function
 export function byteArrayToHex(byteArray: ByteArray): string {
-  let hex = "";
-  for (let i = 0; i < byteArray.length; i++) {
-    hex += ("00" + byteArray[i].toString(16)).slice(-2);
+  let hexString = "";
+  for (const byte of byteArray) {
+    hexString += byte.toString(16).padStart(2, "0");
   }
-
-  console.log(hex);
-  console.log(hex.length);
-  return hex;
+  return hexString;
 }

@@ -354,7 +354,7 @@ export async function handleTextChangedWithValue(
   let resolverEvent = new TextChanged({
     id: createEventID(log.block.height, log.logIndex),
   });
-  resolverEvent.resolver.id = _createResolverID(event.node, log.address);
+  resolverEvent.resolver = resolver;
   resolverEvent.blockNumber = log.block.height;
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
   resolverEvent.key = event.key;
@@ -372,16 +372,18 @@ export async function handleVersionChanged(
   log: Log,
   ctx: DataHandlerContext<Store>
 ): Promise<void> {
+  let resolverId = _createResolverID(event.node, log.address);
+  let newResolver = new Resolver({ id: resolverId });
   let resolverEvent = new VersionChanged({
     id: createEventID(log.block.height, log.logIndex),
   });
   resolverEvent.blockNumber = log.block.height;
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
-  resolverEvent.resolver.id = _createResolverID(event.node, log.address);
+  resolverEvent.resolver = newResolver;
   resolverEvent.version = event.newVersion;
 
-  EntityBuffer.add(resolverEvent);
-  // await ctx.store.upsert(resolverEvent);
+  // EntityBuffer.add(resolverEvent);
+  await ctx.store.upsert(resolverEvent);
 
   let domain = await ctx.store.get(Domain, {
     where: { id: event.node },
