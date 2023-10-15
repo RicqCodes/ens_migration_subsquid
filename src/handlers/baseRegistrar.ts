@@ -50,6 +50,10 @@ async function _setNamePreimage(
     },
   })!;
 
+  if (!domain) {
+    return;
+  }
+
   if (domain?.labelName !== name) {
     domain!.labelName = name;
     domain!.name = name + ".eth";
