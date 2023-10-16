@@ -144,10 +144,10 @@ export async function handleNameRenewed(
   log: Log,
   ctx: DataHandlerContext<Store>
 ): Promise<void> {
-  let label = byteArrayFromHex(event.id.toString());
+  let label = uint256ToByteArray(event.id);
   let registration = await ctx.store.get(Registration, {
     where: {
-      id: uint8ArrayToHex(label),
+      id: byteArrayToHex(label),
     },
   })!;
 
@@ -162,6 +162,7 @@ export async function handleNameRenewed(
     where: { id: hash },
   })!;
 
+  if (!registration) return;
   registration!.expiryDate = event.expires;
   domain!.expiryDate = event.expires + GRACE_PERIOD_SECONDS;
 

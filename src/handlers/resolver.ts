@@ -90,9 +90,7 @@ export async function handleAddrChanged(
   let account = new Account({ id: event.a });
   await ctx.store.upsert(account);
 
-  let resolver = new Resolver({
-    id: _createResolverID(event.node, log.address),
-  });
+  let resolver = await _getOrCreateResolver(event.node, log.address, ctx);
 
   // Check if the Domain with the specified ID exists
   let domain = await ctx.store.get(Domain, {
@@ -168,21 +166,25 @@ export async function handleMulticoinAddrChanged(
   EntityBuffer.add(resolverEvent);
 }
 
-export function handleAuthorisationChanged(
+export async function handleAuthorisationChanged(
   event: {
     node: string;
     owner: string;
     target: string;
     isAuthorised: boolean;
   },
-  log: Log
-): void {
+  log: Log,
+  ctx: DataHandlerContext<Store>
+): Promise<void> {
+  let resolver = await _getOrCreateResolver(event.node, log.address, ctx);
+  await ctx.store.upsert(resolver);
+
   let resolverEvent = new AuthorisationChanged({
     id: _createEventID(log.block.height, log.logIndex),
   });
   resolverEvent.blockNumber = log.block.height;
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
-  resolverEvent.resolver.id = _createResolverID(event.node, log.address);
+  resolverEvent.resolver = resolver;
   resolverEvent.owner = decodeHex(event.owner);
   resolverEvent.target = decodeHex(event.target);
   resolverEvent.isAuthorized = event.isAuthorised;

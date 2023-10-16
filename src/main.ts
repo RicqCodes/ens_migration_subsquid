@@ -74,8 +74,13 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
       if (log.topics[0] === resolver.events["AddrChanged"].topic) {
         console.log("addrchange is running");
 
-        const eventData = resolver.events["AddrChanged"].decode(log);
-        await handleAddrChanged(eventData, log, ctx);
+        try {
+          const eventData = resolver.events["AddrChanged"].decode(log);
+
+          await handleAddrChanged(eventData, log, ctx);
+        } catch (err) {
+          ctx.log.error("range error from decoding Addrchanged");
+        }
       }
       if (log.topics[0] === resolver.events["AddressChanged"].topic) {
         console.log("addresschange is running");
@@ -86,7 +91,7 @@ processor.run(new TypeormDatabase({ supportHotBlocks: true }), async (ctx) => {
         console.log("authorization is running");
 
         const eventData = resolver.events["AuthorisationChanged"].decode(log);
-        handleAuthorisationChanged(eventData, log);
+        await handleAuthorisationChanged(eventData, log, ctx);
       }
       if (log.topics[0] === resolver.events["ContenthashChanged"].topic) {
         console.log("contentHashChanged is running");
