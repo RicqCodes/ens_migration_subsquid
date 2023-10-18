@@ -374,11 +374,11 @@ export async function handleVersionChanged(
   log: Log,
   ctx: DataHandlerContext<Store>
 ): Promise<void> {
-  let resolverId = _createResolverID(event.node, log.address);
-  let newResolver = new Resolver({ id: resolverId });
+  let newResolver = await _getOrCreateResolver(event.node, log.address, ctx);
   let resolverEvent = new VersionChanged({
     id: createEventID(log.block.height, log.logIndex),
   });
+
   resolverEvent.blockNumber = log.block.height;
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
   resolverEvent.resolver = newResolver;
