@@ -85,82 +85,8 @@ async function _recurseDomainDelete(
 async function _saveDomain(domain: Domain, ctx: any) {
   await _recurseDomainDelete(domain, ctx);
   EntityBuffer.add(domain);
-  // await ctx.store.upsert(domain);
 }
 
-// async function _handleNewOwner(
-//   event: { node: string; label: string; owner: string },
-//   log: Log,
-//   ctx: DataHandlerContext<Store>,
-//   isMigrated: boolean
-// ) {
-//   let account = new Account({ id: event.owner });
-//   await ctx.store.upsert(account);
-
-//   let subnode = makeSubnode(event.node, event.label);
-//   let domain = await _getDomain(subnode, ctx, BigInt(log.block.timestamp));
-//   let parent = await _getDomain(event.node, ctx);
-//   if (domain === undefined) {
-//     domain = new Domain({ id: subnode });
-//     domain.createdAt = BigInt(log.block.timestamp);
-//     domain.subdomainCount = 0;
-//   }
-
-//   if (domain.parent === undefined && parent !== undefined) {
-//     // domain.parent = parent;
-//     parent.subdomainCount = parent.subdomainCount + 1;
-//     // EntityBuffer.add(parent);
-//     await ctx.store.upsert(parent);
-//   }
-
-//   if (domain.name == null) {
-//     // Get label and node names
-//     let label = await ctx.store.get(Domain, {
-//       where: {
-//         labelName: event.label,
-//       },
-//     });
-
-//     if (label != undefined) {
-//       domain!.labelName = label.labelName;
-//     }
-
-//     let newLabel = "";
-//     if (label === undefined) {
-//       newLabel = "[" + event.label.slice(2) + "]";
-//     }
-
-//     if (
-//       event.node ==
-//       "0x0000000000000000000000000000000000000000000000000000000000000000"
-//     ) {
-//       domain!.name = label?.labelName || newLabel;
-//     } else {
-//       parent = parent!;
-//       let name = parent?.name;
-//       if ((label || newLabel) && name) {
-//         domain.name = label?.labelName
-//           ? label?.labelName
-//           : newLabel + "." + name;
-//       }
-//     }
-//   }
-//   domain.owner = account;
-//   domain.labelhash = decodeHex(event.label);
-//   domain.isMigrated = isMigrated;
-//   await _saveDomain(domain, ctx);
-
-//   let domainEvent = new NewOwner({
-//     id: createEventID(log.block.height, log.logIndex),
-//   });
-//   domainEvent.blockNumber = log.block.height;
-//   domainEvent.transactionID = decodeHex(log.transaction?.hash!);
-//   domainEvent.parentDomain = parent;
-//   domainEvent.domain = domain;
-//   domainEvent.owner = account;
-
-//   EntityBuffer.add(domainEvent);
-// }
 async function _handleNewOwner(
   event: { node: string; label: string; owner: string },
   log: Log,
@@ -309,6 +235,7 @@ export async function handleNewTTL(
 ): Promise<void> {
   let node = event.node;
   let domain = await _getDomain(node, ctx);
+
   // For the edge case that a domain's owner and resolver are set to empty
   // in the same transaction as setting TTL
   if (domain) {

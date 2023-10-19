@@ -17,43 +17,38 @@ import { EntityBuffer } from "../entityBuffer";
 
 function _decodeName(buf: Uint8Array, ctx: any): Array<string> | null {
   let offset = 0;
-  let list: Uint8Array[] = [];
-  const dot = new Uint8Array([0x2e]);
+  let list = new Uint8Array(0);
+  let dot = new Uint8Array([0x2e]);
   let len = buf[offset++];
-  const hex = buf.reduce(
-    (acc, byte) => acc + byte.toString(16).padStart(2, "0"),
-    ""
-  );
+  let hex = Array.from(buf)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+
   let firstLabel = "";
+
   if (len === 0) {
     return [firstLabel, "."];
   }
 
   while (len) {
     let label = hex.slice((offset + 1) * 2, (offset + 1 + len) * 2);
-    const labelBytes = new Uint8Array(
+    let labelBytes = new Uint8Array(
       label.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
     );
-
     if (!checkValidLabel(new TextDecoder().decode(labelBytes), ctx)) {
       return null;
     }
 
     if (offset > 1) {
-      list.push(dot);
+      list = new Uint8Array([...list, ...dot]);
     } else {
       firstLabel = new TextDecoder().decode(labelBytes);
     }
-    list.push(labelBytes);
+    list = new Uint8Array([...list, ...labelBytes]);
     offset += len;
     len = buf[offset++];
   }
-
-  const concatenatedLabels = new Uint8Array(
-    list.reduce((acc, label) => acc.concat(Array.from(label)), [] as number[])
-  );
-
-  return [firstLabel, new TextDecoder().decode(concatenatedLabels)];
+  return [firstLabel, new TextDecoder().decode(list)];
 }
 
 const PARENT_CANNOT_CONTROL: number = parseInt("65536", 10);
@@ -92,7 +87,7 @@ async function createOrLoadDomain(
   });
   if (domain == undefined) {
     domain = new Domain({ id: node });
-    await ctx.store.upsert(domain);
+    // await ctx.store.upsert(domain);
   }
 
   return domain;
@@ -108,11 +103,13 @@ async function _makeWrappedTransfer(
 ): Promise<void> {
   const _to = await createOrLoadAccount(to, ctx);
   const namehash = "0x" + node.toString().slice(2).padStart(64, "0");
-  const domain = await createOrLoadDomain(namehash, ctx);
+  let domain = await createOrLoadDomain(namehash, ctx);
   let wrappedDomain = await ctx.store.get(WrappedDomain, {
     where: { id: namehash },
     relations: { owner: true },
   });
+
+  if (!domain.isMigrated) return;
 
   // new registrations emit the Transfer` event before the NameWrapped event
   // so we need to create the WrappedDomain entity here
@@ -123,6 +120,7 @@ async function _makeWrappedTransfer(
     wrappedDomain.fuses = 0;
   }
   wrappedDomain.owner = _to;
+
   // EntityBuffer.add(wrappedDomain);
   await ctx.store.upsert(wrappedDomain);
   domain.wrappedOwner = _to;
@@ -151,6 +149,8 @@ export async function handleNameWrapped(
   let decoded = _decodeName(decodeHex(event.name), ctx);
   let label: string | null = null;
   let name: string | null = null;
+
+  if (!label) return;
   if (decoded !== null) {
     label = decoded[0];
     name = decoded[1];
@@ -209,6 +209,7 @@ export async function handleNameUnwrapped(
   let owner = await createOrLoadAccount(event.owner, ctx);
 
   let domain = await createOrLoadDomain(event.node, ctx);
+  if (!domain.subdomainCount || !domain.parent) return;
   domain.wrappedOwner = null;
   if (domain.expiryDate && domain.parent!.id !== ETH_NODE) {
     domain.expiryDate = null;
@@ -241,14 +242,16 @@ export async function handleFusesSet(
     where: { id: event.node },
   });
 
-  const domain = await createOrLoadDomain(event.node, ctx);
+  let domain = await createOrLoadDomain(event.node, ctx);
+
+  if (!domain.subdomainCount) return;
+
   if (wrappedDomain) {
     wrappedDomain.fuses = Number(event.fuses);
-    // await ctx.store.upsert(wrappedDomain);
-    EntityBuffer.add(wrappedDomain);
+    await ctx.store.upsert(wrappedDomain);
+    // EntityBuffer.add(wrappedDomain);
 
     if (wrappedDomain.expiryDate && checkPccBurned(wrappedDomain.fuses)) {
-      let domain = await createOrLoadDomain(event.node, ctx);
       if (!domain.expiryDate || wrappedDomain.expiryDate > domain.expiryDate!) {
         domain.expiryDate = wrappedDomain.expiryDate;
         EntityBuffer.add(domain);
@@ -256,6 +259,7 @@ export async function handleFusesSet(
       }
     }
   }
+
   let fusesBurnedEvent = new FusesSet({
     id: createEventID(log.block.height, log.logIndex),
   });
@@ -280,6 +284,8 @@ export async function handleExpiryExtended(
   });
 
   let domain = await createOrLoadDomain(event.node, ctx);
+
+  if (!domain.subdomainCount) return;
 
   if (wrappedDomain) {
     wrappedDomain.expiryDate = event.expiry;

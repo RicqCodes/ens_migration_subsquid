@@ -32,7 +32,6 @@ export function concat(a: ByteArray, b: ByteArray): ByteArray {
   for (let j = 0; j < b.length; j++) {
     out[a.length + j] = b[j];
   }
-  console.log(out);
   return out;
 }
 
@@ -44,7 +43,7 @@ export function checkValidLabel(name: string, ctx: any): boolean {
   for (let i = 0; i < name.length; i++) {
     let c = name.charCodeAt(i);
     if (c === 0) {
-      ctx.log.warn("Invalid label '{}' contained null byte. Skipping.", [name]);
+      // ctx.log.warn("Invalid label '{}' contained null byte. Skipping.", [name]);
       return false;
     } else if (c === 46) {
       ctx.log.warn(

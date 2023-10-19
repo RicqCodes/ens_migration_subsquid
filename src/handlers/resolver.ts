@@ -69,8 +69,10 @@ export async function handleABIChanged(
     id: _createEventID(log.block.height, log.logIndex),
   });
 
+  let resolver = await _getOrCreateResolver(event.node, log.address, ctx);
+
   // Associate the resolver with the ABIChanged event
-  resolverEvent.resolver.id = _createResolverID(event.node, log.address);
+  resolverEvent.resolver = resolver;
   resolverEvent.blockNumber = log.block.height;
   resolverEvent.transactionID = decodeHex(log.transaction?.hash!);
   resolverEvent.contentType = event.contentType;
@@ -300,7 +302,6 @@ export async function handleTextChanged(
   log: Log,
   ctx: any
 ): Promise<void> {
-  console.log("event in handle text changed", event.node);
   let resolver = await _getOrCreateResolver(event.node, log.address, ctx);
   let key = event.key;
   if (resolver.texts == null) {
