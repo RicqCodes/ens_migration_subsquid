@@ -217,7 +217,7 @@ export async function handleNewResolver(
 
     EntityBuffer.add(domainEvent);
   } catch (err) {
-    console.error("Error during resolver handling:", err);
+    // console.error("Error during resolver handling:", err);
 
     // Set other fields to null or handle them as needed
     domain.resolvedAddress = null;
