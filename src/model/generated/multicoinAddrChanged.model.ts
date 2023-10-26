@@ -1,5 +1,4 @@
 import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_} from "typeorm"
-import * as marshal from "./marshal"
 import {Resolver} from "./resolver.model"
 
 @Entity_()
@@ -36,8 +35,8 @@ export class MulticoinAddrChanged {
     /**
      * The coin type of the changed address
      */
-    @Column_("numeric", {transformer: marshal.bigintTransformer, nullable: false})
-    coinType!: bigint
+    @Column_("text", {nullable: false})
+    coinType!: string
 
     /**
      * The new address value for the given coin type

@@ -109,7 +109,7 @@ async function _makeWrappedTransfer(
     relations: { owner: true },
   });
 
-  if (!domain.isMigrated) return;
+  if (domain.isMigrated === undefined) return;
 
   // new registrations emit the Transfer` event before the NameWrapped event
   // so we need to create the WrappedDomain entity here
@@ -244,7 +244,7 @@ export async function handleFusesSet(
 
   let domain = await createOrLoadDomain(event.node, ctx);
 
-  if (!domain.subdomainCount) return;
+  if (domain.subdomainCount === undefined) return;
 
   if (wrappedDomain) {
     wrappedDomain.fuses = Number(event.fuses);
@@ -285,7 +285,7 @@ export async function handleExpiryExtended(
 
   let domain = await createOrLoadDomain(event.node, ctx);
 
-  if (!domain.subdomainCount) return;
+  if (domain.subdomainCount === undefined) return;
 
   if (wrappedDomain) {
     wrappedDomain.expiryDate = event.expiry;

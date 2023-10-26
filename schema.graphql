@@ -287,7 +287,7 @@ type Resolver @entity {
   "The set of observed text record keys for this resolver"
   texts: [String!]
   "The set of observed SLIP-44 coin types for this resolver"
-  coinTypes: JSON
+  coinTypes: [String!]
 }
 
 interface ResolverEvent @query {
@@ -324,7 +324,7 @@ type MulticoinAddrChanged implements ResolverEvent @entity {
   "Transaction ID in which this event was emitted"
   transactionID: Bytes!
   "The coin type of the changed address"
-  coinType: BigInt!
+  coinType: String!
   "The new address value for the given coin type"
   addr: Bytes!
 }
