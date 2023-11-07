@@ -64,7 +64,7 @@ async function createOrLoadAccount(
   let account = await ctx.store.get(Account, { where: { id: address } });
   if (account == undefined) {
     account = new Account({ id: address });
-    ctx.store.upsert(account);
+    await ctx.store.upsert(account);
   }
 
   return account;
@@ -87,7 +87,7 @@ async function createOrLoadDomain(
   });
   if (domain == undefined) {
     domain = new Domain({ id: node });
-    // await ctx.store.upsert(domain);
+    await ctx.store.upsert(domain);
   }
 
   return domain;
