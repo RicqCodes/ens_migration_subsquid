@@ -10,10 +10,16 @@ import {
   WrappedTransfer,
 } from "../model";
 import { Log } from "../processor";
-import { ETH_NODE, checkValidLabel, createEventID } from "../utils";
+import {
+  EMPTY_ADDRESS,
+  ETH_NODE,
+  checkValidLabel,
+  createEventID,
+} from "../utils";
 import { decodeHex, DataHandlerContext } from "@subsquid/evm-processor";
 import { Store } from "../db";
 import { EntityBuffer } from "../entityBuffer";
+import { _createDomain } from "./registry";
 
 function _decodeName(buf: Uint8Array, ctx: any): Array<string> | null {
   let offset = 0;
@@ -72,7 +78,8 @@ async function createOrLoadAccount(
 
 async function createOrLoadDomain(
   node: string,
-  ctx: DataHandlerContext<Store>
+  ctx: DataHandlerContext<Store>,
+  log: Log
 ): Promise<Domain> {
   let domain = await ctx.store.get(Domain, {
     where: { id: node },
@@ -85,11 +92,20 @@ async function createOrLoadDomain(
       wrappedOwner: true,
     },
   });
+
+  const owner = new Account({ id: EMPTY_ADDRESS });
+  await ctx.store.upsert(owner);
+
   if (domain == undefined) {
     domain = new Domain({ id: node });
+
+    domain.owner = owner;
+    domain.isMigrated = true;
+    domain.createdAt = BigInt(log.block.timestamp);
+    domain.subdomainCount = 0;
+
     await ctx.store.upsert(domain);
   }
-
   return domain;
 }
 
@@ -99,11 +115,12 @@ async function _makeWrappedTransfer(
   eventID: string,
   node: BigInt,
   to: string,
-  ctx: DataHandlerContext<Store>
+  ctx: DataHandlerContext<Store>,
+  log: Log
 ): Promise<void> {
   const _to = await createOrLoadAccount(to, ctx);
   const namehash = "0x" + node.toString().slice(2).padStart(64, "0");
-  let domain = await createOrLoadDomain(namehash, ctx);
+  let domain = await createOrLoadDomain(namehash, ctx, log);
   let wrappedDomain = await ctx.store.get(WrappedDomain, {
     where: { id: namehash },
     relations: { owner: true },
@@ -129,7 +146,6 @@ async function _makeWrappedTransfer(
   wrappedTransfer.transactionID = decodeHex(transactionID);
   wrappedTransfer.owner = _to;
   EntityBuffer.add(wrappedTransfer);
-  // return wrappedTransfer;
 }
 
 export async function handleNameWrapped(
@@ -157,7 +173,7 @@ export async function handleNameWrapped(
   let blockNumber = log.block.height;
   let transactionID = log.transaction?.hash;
   let owner = await createOrLoadAccount(event.owner, ctx);
-  let domain = await createOrLoadDomain(node, ctx);
+  let domain = await createOrLoadDomain(node, ctx, log);
 
   if (!domain.labelName && label) {
     domain.labelName = label;
@@ -208,7 +224,7 @@ export async function handleNameUnwrapped(
   let blockNumber = log.block.height;
   let transactionID = log.transaction?.hash;
   let owner = await createOrLoadAccount(event.owner, ctx);
-  let domain = await createOrLoadDomain(event.node, ctx);
+  let domain = await createOrLoadDomain(event.node, ctx, log);
 
   if (!domain.subdomainCount || !domain.parent) return;
   domain.wrappedOwner = null;
@@ -245,7 +261,7 @@ export async function handleFusesSet(
   let wrappedDomain = await ctx.store.get(WrappedDomain, {
     where: { id: event.node },
   });
-  let domain = await createOrLoadDomain(node, ctx);
+  let domain = await createOrLoadDomain(node, ctx, log);
 
   if (domain.subdomainCount === undefined) return;
 
@@ -289,7 +305,7 @@ export async function handleExpiryExtended(
     where: { id: node },
   });
 
-  let domain = await createOrLoadDomain(event.node, ctx);
+  let domain = await createOrLoadDomain(event.node, ctx, log);
 
   if (domain.subdomainCount === undefined) return;
 
@@ -335,7 +351,8 @@ export async function handleTransferSingle(
     createEventID(log.block.height, log.logIndex).concat("-0"),
     event.id,
     event.to,
-    ctx
+    ctx,
+    log
   );
 }
 
@@ -359,10 +376,9 @@ export async function handleTransferBatch(
         .concat(i.toString()),
       event.ids[i],
       event.to,
-      ctx
+      ctx,
+      log
     );
     // transferBatch.push(wrappedTransfer);
   }
-
-  // return transferBatch;
 }

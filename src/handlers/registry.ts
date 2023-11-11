@@ -16,7 +16,7 @@ import { Contract as ens } from "../abi/NameWrapper";
 
 const BIG_INT_ZERO: bigint = 0n;
 
-async function _createDomain(
+export async function _createDomain(
   node: string,
   timestamp: bigint,
   ctx: any
@@ -31,6 +31,8 @@ async function _createDomain(
     domain.isMigrated = true;
     domain.createdAt = timestamp;
     domain.subdomainCount = 0;
+
+    await ctx.store.upsert(domain);
   }
   return domain;
 }
