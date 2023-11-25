@@ -1,4 +1,3 @@
-import { Bytes } from "@subsquid/evm-processor/lib/interfaces/evm";
 import {
   Account,
   Domain,
@@ -14,22 +13,23 @@ import {
   EMPTY_ADDRESS,
   ETH_NODE,
   checkValidLabel,
+  concat,
   createEventID,
 } from "../utils";
 import { decodeHex, DataHandlerContext } from "@subsquid/evm-processor";
 import { Store } from "../db";
 import { EntityBuffer } from "../entityBuffer";
 import { _createDomain } from "./registry";
+import { Bytes } from "@subsquid/evm-processor/lib/interfaces/evm";
 
-function _decodeName(buf: Uint8Array, ctx: any): Array<string> | null {
+function _decodeName(
+  buf: Uint8Array,
+  ctx: DataHandlerContext<Store>
+): Array<string> | null {
   let offset = 0;
-  let list = new Uint8Array(0);
-  let dot = new Uint8Array([0x2e]);
+  let list: number[] = [];
+  const dot = 0x2e; // ASCII code for '.'
   let len = buf[offset++];
-  let hex = Array.from(buf)
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-
   let firstLabel = "";
 
   if (len === 0) {
@@ -37,24 +37,29 @@ function _decodeName(buf: Uint8Array, ctx: any): Array<string> | null {
   }
 
   while (len) {
-    let label = hex.slice((offset + 1) * 2, (offset + 1 + len) * 2);
-    let labelBytes = new Uint8Array(
-      label.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
-    );
-    if (!checkValidLabel(new TextDecoder().decode(labelBytes), ctx)) {
+    let label = Array.from(buf.slice(offset, offset + len)); // Convert Uint8Array to array
+    offset += len;
+
+    let labelString = Buffer.from(label).toString("hex");
+
+    if (!checkValidLabel(labelString, ctx)) {
       return null;
     }
 
     if (offset > 1) {
-      list = new Uint8Array([...list, ...dot]);
+      list.push(dot);
     } else {
-      firstLabel = new TextDecoder().decode(labelBytes);
+      firstLabel = Buffer.from(label).toString();
     }
-    list = new Uint8Array([...list, ...labelBytes]);
-    offset += len;
+
+    // Now you can use concat with a regular array
+    if (label.length > 0) {
+      list = list.concat(label);
+    }
     len = buf[offset++];
   }
-  return [firstLabel, new TextDecoder().decode(list)];
+
+  return [firstLabel, String.fromCharCode(...list)];
 }
 
 const PARENT_CANNOT_CONTROL: number = parseInt("65536", 10);
@@ -226,13 +231,14 @@ export async function handleNameUnwrapped(
   let owner = await createOrLoadAccount(event.owner, ctx);
   let domain = await createOrLoadDomain(event.node, ctx, log);
 
-  if (!domain.subdomainCount || !domain.parent) return;
+  // if (!domain.subdomainCount || !domain.parent) return;
+
   domain.wrappedOwner = null;
   if (domain.expiryDate && domain.parent!.id !== ETH_NODE) {
     domain.expiryDate = null;
   }
 
-  ctx.store.upsert(domain);
+  await ctx.store.upsert(domain);
 
   let nameUnwrappedEvent = new NameUnwrapped({
     id: createEventID(blockNumber, log.logIndex),
@@ -241,9 +247,9 @@ export async function handleNameUnwrapped(
   nameUnwrappedEvent.owner = owner;
   nameUnwrappedEvent.blockNumber = blockNumber;
   nameUnwrappedEvent.transactionID = decodeHex(transactionID!);
-  ctx.store.upsert(nameUnwrappedEvent);
+  await ctx.store.upsert(nameUnwrappedEvent);
 
-  ctx.store.remove(WrappedDomain, event.node);
+  await ctx.store.remove(WrappedDomain, event.node);
 }
 
 export async function handleFusesSet(
@@ -263,7 +269,7 @@ export async function handleFusesSet(
   });
   let domain = await createOrLoadDomain(node, ctx, log);
 
-  if (domain.subdomainCount === undefined) return;
+  // if (domain.subdomainCount === undefined) return;
 
   if (wrappedDomain) {
     wrappedDomain.fuses = Number(fuses);
@@ -286,7 +292,6 @@ export async function handleFusesSet(
   fusesBurnedEvent.blockNumber = blockNumber;
   fusesBurnedEvent.transactionID = decodeHex(transactionID!);
   EntityBuffer.add(domain);
-  // return fusesBurnedEvent;
 }
 
 export async function handleExpiryExtended(

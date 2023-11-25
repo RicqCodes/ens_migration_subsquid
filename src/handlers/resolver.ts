@@ -228,7 +228,7 @@ export async function handleInterfaceChanged(
   },
   log: Log,
   ctx: any
-): Promise<InterfaceChanged> {
+): Promise<void> {
   let resolver = await _getOrCreateResolver(event.node, log.address, ctx);
 
   let resolverEvent = new InterfaceChanged({
@@ -240,7 +240,8 @@ export async function handleInterfaceChanged(
   resolverEvent.interfaceID = decodeHex(event.interfaceID);
   resolverEvent.implementer = decodeHex(event.implementer);
 
-  return resolverEvent;
+  await ctx.store.upsert(resolverEvent);
+  // return resolverEvent;
 }
 
 export async function handleNameChanged(

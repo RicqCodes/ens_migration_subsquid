@@ -48,9 +48,6 @@ export const processor = new EvmBatchProcessor()
   .setBlockRange({
     from: 3000000,
   })
-  //   .setBlockRange({
-  //     from: 3796301,
-  //   })
   .addLog({
     address: [BASE_REGISTRAR_CONTRACT],
     topic0: [
@@ -58,9 +55,6 @@ export const processor = new EvmBatchProcessor()
       baseRegistrarAbi.events["NameRenewed"].topic,
       baseRegistrarAbi.events["Transfer"].topic,
     ],
-    // range: {
-    //   from: 9380410,
-    // },
     transaction: true,
   })
   .addLog({
@@ -69,9 +63,6 @@ export const processor = new EvmBatchProcessor()
       ethRegistrarControllerAbi.events["NameRegistered"].topic,
       ethRegistrarControllerAbi.events["NameRenewed"].topic,
     ],
-    // range: {
-    //   from: 16925618,
-    // },
     transaction: true,
   })
   .addLog({
@@ -80,9 +71,6 @@ export const processor = new EvmBatchProcessor()
       ethRegistrarOldControllerAbi.events["NameRegistered"].topic,
       ethRegistrarOldControllerAbi.events["NameRenewed"].topic,
     ],
-    // range: {
-    //   from: 16925618,
-    // },
     transaction: true,
   })
   .addLog({
@@ -95,9 +83,6 @@ export const processor = new EvmBatchProcessor()
       nameWrapperAbi.events["TransferSingle"].topic,
       nameWrapperAbi.events["TransferBatch"].topic,
     ],
-    // range: {
-    //   from: 16925608,
-    // },
     transaction: true,
   })
   .addLog({
@@ -108,9 +93,6 @@ export const processor = new EvmBatchProcessor()
       ensRegistry.events["NewTTL"].topic,
       ensRegistry.events["Transfer"].topic,
     ],
-    // range: {
-    //   from: 9380380,
-    // },
     transaction: true,
   })
   .addLog({
@@ -121,14 +103,11 @@ export const processor = new EvmBatchProcessor()
       ensRegistry.events["NewTTL"].topic,
       ensRegistry.events["Transfer"].topic,
     ],
-    // range: {
-    //   from: 9380380,
-    // },
     transaction: true,
   })
   .addLog({
     topic0: [
-      //   resolver.events["ABIChanged"].topic,
+      resolver.events["ABIChanged"].topic,
       resolver.events["AddrChanged"].topic,
       resolver.events["AddressChanged"].topic,
       resolver.events["AuthorisationChanged"].topic,
