@@ -46,7 +46,13 @@ function _decodeName(
       return null;
     }
 
-    if (offset > 1) {
+    // if (offset > 1) {
+    //   list.push(dot);
+    // } else {
+    //   firstLabel = Buffer.from(label).toString();
+    // }
+
+    if (offset > 1 || firstLabel !== "") {
       list.push(dot);
     } else {
       firstLabel = Buffer.from(label).toString();
@@ -234,7 +240,7 @@ export async function handleNameUnwrapped(
   // if (!domain.subdomainCount || !domain.parent) return;
 
   domain.wrappedOwner = null;
-  if (domain.expiryDate && domain.parent!.id !== ETH_NODE) {
+  if (domain.expiryDate && domain.parent?.id !== ETH_NODE) {
     domain.expiryDate = null;
   }
 
