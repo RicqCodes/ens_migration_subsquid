@@ -275,8 +275,6 @@ export async function handleFusesSet(
   });
   let domain = await createOrLoadDomain(node, ctx, log);
 
-  // if (domain.subdomainCount === undefined) return;
-
   if (wrappedDomain) {
     wrappedDomain.fuses = Number(fuses);
     await ctx.store.upsert(wrappedDomain);
@@ -298,6 +296,7 @@ export async function handleFusesSet(
   fusesBurnedEvent.blockNumber = blockNumber;
   fusesBurnedEvent.transactionID = decodeHex(transactionID!);
   EntityBuffer.add(domain);
+  EntityBuffer.add(fusesBurnedEvent);
 }
 
 export async function handleExpiryExtended(
