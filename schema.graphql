@@ -4,20 +4,20 @@ type Domain @entity {
   "The human readable name, if known. Unknown portions replaced with hash in square brackets (eg, foo.[1234].eth)"
   name: String
   "The human readable label name (imported from CSV), if known"
-  labelName: String
+  labelName: String @index
   "keccak256(labelName)"
-  labelhash: Bytes
+  labelhash: Bytes @index
   "The namehash (id) of the parent name"
-  parent: Domain
+  parent: Domain @index
   "Can count domains from length of array"
   subdomains: [Domain!]! @derivedFrom(field: "parent")
   "The number of subdomains"
   subdomainCount: Int!
   "Address logged from current resolver, if any"
-  resolvedAddress: Account
+  resolvedAddress: Account @index
 
   "The resolver that controls the domain's settings"
-  resolver: Resolver
+  resolver: Resolver @index
   "The time-to-live (TTL) value of the domain's records"
   ttl: BigInt
 
@@ -27,11 +27,11 @@ type Domain @entity {
   createdAt: BigInt!
 
   "The account that owns the domain"
-  owner: Account!
+  owner: Account! @index
   "The account that owns the ERC721 NFT for the domain"
-  registrant: Account
+  registrant: Account @index
   "The account that owns the wrapped domain"
-  wrappedOwner: Account
+  wrappedOwner: Account @index
 
   "The expiry date for the domain, from either the registration, or the wrapped domain if PCC is burned"
   expiryDate: BigInt
@@ -59,7 +59,7 @@ type Transfer implements DomainEvent @entity {
   "The domain name associated with the event"
   domain: Domain!
   "The block number at which the event occurred"
-  blockNumber: Int!
+  blockNumber: Int! @index
   "The transaction hash of the transaction that triggered the event"
   transactionID: Bytes!
   "The account that owns the domain after the transfer"
@@ -76,7 +76,7 @@ type NewOwner implements DomainEvent @entity {
   "The block number at which the event occurred"
   blockNumber: Int!
   "The transaction hash of the transaction that triggered the event"
-  transactionID: Bytes!
+  transactionID: Bytes! @index
   "The new account that owns the domain"
   owner: Account!
 }
@@ -89,7 +89,7 @@ type NewResolver implements DomainEvent @entity {
   "The block number at which the event occurred"
   blockNumber: Int!
   "The transaction hash of the transaction that triggered the event"
-  transactionID: Bytes!
+  transactionID: Bytes! @index
   "The new resolver contract address associated with the domain"
   resolver: Resolver!
 }
@@ -100,7 +100,7 @@ type NewTTL implements DomainEvent @entity {
   "The domain name associated with the event"
   domain: Domain!
   "The block number at which the event occurred"
-  blockNumber: Int!
+  blockNumber: Int! @index
   "The transaction hash of the transaction that triggered the event"
   transactionID: Bytes!
   "The new TTL value (in seconds) associated with the domain"
@@ -130,9 +130,9 @@ type NameWrapped implements DomainEvent @entity {
   "The transaction hash of the transaction that wrapped the domain"
   transactionID: Bytes!
   "The human-readable name of the wrapped domain"
-  name: String
+  name: String @index
   "The number of fuses associated with the wrapped domain"
-  fuses: Int!
+  fuses: Int! @index
   "The account that owns the wrapped domain"
   owner: Account!
   "The expiry date of the wrapped domain registration"
@@ -190,9 +190,9 @@ type Registration @entity {
   "The cost associated with the domain registration"
   cost: BigInt
   "The account that registered the domain"
-  registrant: Account!
+  registrant: Account! @index
   "The human-readable label name associated with the domain registration"
-  labelName: String
+  labelName: String @index
 }
 
 interface RegistrationEvent @query {
@@ -255,9 +255,9 @@ type WrappedDomain @entity {
   "The expiry date of the wrapped domain"
   expiryDate: BigInt!
   "The number of fuses remaining on the wrapped domain"
-  fuses: Int!
+  fuses: Int! @index
   "The account that owns this WrappedDomain"
-  owner: Account!
+  owner: Account! @index
   "The name of the wrapped domain"
   name: String
 }
@@ -277,7 +277,7 @@ type Resolver @entity {
   "The unique identifier for this resolver, which is a concatenation of the resolver address and the domain namehash"
   id: ID!
   "The domain that this resolver is associated with"
-  domain: Domain
+  domain: Domain @index
   "The address of the resolver contract"
   address: Bytes!
   "The current value of the 'addr' record for this resolver, as determined by the associated events"
@@ -348,7 +348,7 @@ type AbiChanged implements ResolverEvent @entity {
   "Used to derive relationships to Resolvers"
   resolver: Resolver!
   "The block number at which the event was emitted"
-  blockNumber: Int!
+  blockNumber: Int! @index
   "The transaction hash of the transaction in which the event was emitted"
   transactionID: Bytes!
   "The content type of the ABI change"

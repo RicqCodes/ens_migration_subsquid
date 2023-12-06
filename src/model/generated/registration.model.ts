@@ -51,6 +51,7 @@ export class Registration {
     /**
      * The human-readable label name associated with the domain registration
      */
+    @Index_()
     @Column_("text", {nullable: true})
     labelName!: string | undefined | null
 }

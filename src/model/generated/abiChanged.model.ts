@@ -24,6 +24,7 @@ export class AbiChanged {
     /**
      * The block number at which the event was emitted
      */
+    @Index_()
     @Column_("int4", {nullable: false})
     blockNumber!: number
 

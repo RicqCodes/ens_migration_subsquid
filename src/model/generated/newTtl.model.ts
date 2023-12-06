@@ -24,6 +24,7 @@ export class NewTTL {
     /**
      * The block number at which the event occurred
      */
+    @Index_()
     @Column_("int4", {nullable: false})
     blockNumber!: number
 

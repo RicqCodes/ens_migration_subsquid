@@ -37,12 +37,14 @@ export class NameWrapped {
     /**
      * The human-readable name of the wrapped domain
      */
+    @Index_()
     @Column_("text", {nullable: true})
     name!: string | undefined | null
 
     /**
      * The number of fuses associated with the wrapped domain
      */
+    @Index_()
     @Column_("int4", {nullable: false})
     fuses!: number
 

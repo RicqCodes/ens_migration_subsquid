@@ -32,6 +32,7 @@ export class WrappedDomain {
     /**
      * The number of fuses remaining on the wrapped domain
      */
+    @Index_()
     @Column_("int4", {nullable: false})
     fuses!: number
 

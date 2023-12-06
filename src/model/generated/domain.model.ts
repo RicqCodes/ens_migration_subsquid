@@ -1,4 +1,4 @@
-import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, ManyToOne as ManyToOne_, Index as Index_, OneToMany as OneToMany_} from "typeorm"
+import {Entity as Entity_, Column as Column_, PrimaryColumn as PrimaryColumn_, Index as Index_, ManyToOne as ManyToOne_, OneToMany as OneToMany_} from "typeorm"
 import * as marshal from "./marshal"
 import {Account} from "./account.model"
 import {Resolver} from "./resolver.model"
@@ -26,12 +26,14 @@ export class Domain {
     /**
      * The human readable label name (imported from CSV), if known
      */
+    @Index_()
     @Column_("text", {nullable: true})
     labelName!: string | undefined | null
 
     /**
      * keccak256(labelName)
      */
+    @Index_()
     @Column_("bytea", {nullable: true})
     labelhash!: Uint8Array | undefined | null
 

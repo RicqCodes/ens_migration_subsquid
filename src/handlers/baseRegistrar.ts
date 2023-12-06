@@ -44,11 +44,7 @@ async function _setNamePreimage(
   // Calculate the keccak256 hash
   const hash = ethers.keccak256(concatenatedArray);
 
-  let domain = await ctx.store.get(Domain, {
-    where: {
-      id: hash,
-    },
-  })!;
+  let domain = await ctx.store.get(Domain, hash)!;
 
   if (!domain) {
     return;
@@ -145,11 +141,7 @@ export async function handleNameRenewed(
   ctx: DataHandlerContext<Store>
 ): Promise<void> {
   let label = uint256ToByteArray(event.id);
-  let registration = await ctx.store.get(Registration, {
-    where: {
-      id: byteArrayToHex(label),
-    },
-  })!;
+  let registration = await ctx.store.get(Registration, byteArrayToHex(label))!;
 
   // Concatenate the byte arrays
   const concatenatedArray = new Uint8Array(rootNode.length + label.length);
@@ -158,9 +150,7 @@ export async function handleNameRenewed(
   // Calculate the keccak256 hash
   const hash = ethers.keccak256(concatenatedArray);
 
-  let domain = await ctx.store.get(Domain, {
-    where: { id: hash },
-  })!;
+  let domain = await ctx.store.get(Domain, hash)!;
 
   if (!registration) return;
   registration!.expiryDate = event.expires;

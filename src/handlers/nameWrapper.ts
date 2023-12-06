@@ -78,7 +78,7 @@ async function createOrLoadAccount(
   address: string,
   ctx: any
 ): Promise<Account> {
-  let account = await ctx.store.get(Account, { where: { id: address } });
+  let account = await ctx.store.get(Account, address);
   if (account == undefined) {
     account = new Account({ id: address });
     await ctx.store.upsert(account);
@@ -270,9 +270,7 @@ export async function handleFusesSet(
   let fuses = event.fuses;
   let blockNumber = log.block.height;
   let transactionID = log.transaction?.hash;
-  let wrappedDomain = await ctx.store.get(WrappedDomain, {
-    where: { id: event.node },
-  });
+  let wrappedDomain = await ctx.store.get(WrappedDomain, event.node);
   let domain = await createOrLoadDomain(node, ctx, log);
 
   if (wrappedDomain) {
@@ -311,9 +309,7 @@ export async function handleExpiryExtended(
   let expiry = event.expiry;
   let blockNumber = log.block.height;
   let transactionID = log.transaction?.hash;
-  let wrappedDomain = await ctx.store.get(WrappedDomain, {
-    where: { id: node },
-  });
+  let wrappedDomain = await ctx.store.get(WrappedDomain, node);
 
   let domain = await createOrLoadDomain(event.node, ctx, log);
 

@@ -37,6 +37,7 @@ export class NewOwner {
     /**
      * The transaction hash of the transaction that triggered the event
      */
+    @Index_()
     @Column_("bytea", {nullable: false})
     transactionID!: Uint8Array
 

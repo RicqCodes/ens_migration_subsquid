@@ -36,9 +36,7 @@ async function _getOrCreateResolver(
     where: { id },
     relations: { domain: true },
   });
-  let domain = await ctx.store.get(Domain, {
-    where: { id: node },
-  });
+  let domain = await ctx.store.get(Domain, node);
 
   if (resolver === undefined) {
     resolver = new Resolver({ id });
